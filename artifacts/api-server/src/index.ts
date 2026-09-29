@@ -4,6 +4,7 @@ import app from "./app";
 import { settings } from "./lib/config";
 import { logger } from "./lib/logger";
 import { migrate } from "./lib/migrate";
+import { manager as opencodeManager } from "./lib/opencode/client";
 import { ensureSandboxPython } from "./lib/sandbox-python";
 import * as services from "./lib/services";
 import { networkIsolationPrefix } from "./lib/tools";
@@ -25,6 +26,8 @@ void ensureSandboxPython();
 
 setInterval(() => { void worktree.evictStaleRestores(); }, 60_000).unref();
 setInterval(() => { void services.recoverStaleBranches(); void services.drainBundleCleanupQueue(); }, 5 * 60_000).unref();
+// opencode serve children must not outlive this process
+for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => { void opencodeManager().stopAll().finally(() => process.exit(0)); });
 
 app.listen(port, (err) => {
   if (err) { logger.error({ err }, "Error listening on port"); process.exit(1); }
