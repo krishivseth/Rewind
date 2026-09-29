@@ -25,6 +25,13 @@ const statements = [
   `alter table branches add column if not exists lease_expires_at timestamptz`,
   `alter table branches add column if not exists stop_reason text`,
   `alter table steps add column if not exists note text`,
+  // opencode runner and security classification
+  `alter table branches add column if not exists runner text not null default 'rewind'`,
+  `alter table branches add column if not exists oc_session_id text`,
+  `alter table branches add column if not exists project_dir text`,
+  `alter table steps add column if not exists oc_message_id text`,
+  `alter table steps add column if not exists oc_part_id text`,
+  `alter table steps add column if not exists classification jsonb`,
   // old rows had nullable token columns
   `update steps set input_tokens = 0 where input_tokens is null`,
   `update steps set output_tokens = 0 where output_tokens is null`,

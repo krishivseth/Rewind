@@ -3,6 +3,17 @@ import { index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, u
 export const branchStatus = pgEnum("branch_status", ["queued", "running", "done", "failed", "cancelled"]);
 export const stepKind = pgEnum("step_kind", ["user", "assistant", "tool_call", "tool_result"]);
 
+/** Security verdict on a tool_result step. Enums and numbers only; never model text. */
+export interface Classification {
+  flag: boolean;
+  reasons: string[];
+  injection: number;
+  effect: "pure" | "reversible_local" | "external" | "unknown";
+  effect_conf: number;
+  severity: number;
+  source?: "posthoc" | "inline";
+}
+
 export const repos = pgTable("repos", {
   id: uuid("id").defaultRandom().primaryKey(),
   slug: text("slug").notNull().unique(),
@@ -41,6 +52,10 @@ export const branches = pgTable("branches", {
   totalOutputTokens: integer("total_output_tokens").notNull().default(0),
   bundleKey: text("bundle_key"),
   createdBy: text("created_by"),
+  // "rewind": the built-in loop drives the agent. "opencode": an external `opencode serve` session is recorded.
+  runner: text("runner").notNull().default("rewind"),
+  ocSessionId: text("oc_session_id"),
+  projectDir: text("project_dir"),
   // renewed by the running process; a stale lease means the process died and the branch is failed on the next sweep
   leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -62,6 +77,9 @@ export const steps = pgTable("steps", {
   outputTokens: integer("output_tokens").notNull().default(0),
   latencyMs: integer("latency_ms").notNull().default(0),
   note: text("note"),
+  ocMessageId: text("oc_message_id"),
+  ocPartId: text("oc_part_id"),
+  classification: jsonb("classification").$type<Classification | null>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [uniqueIndex("steps_branch_index_uq").on(table.branchId, table.stepIndex)]);
 

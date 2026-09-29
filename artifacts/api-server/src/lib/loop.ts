@@ -28,6 +28,7 @@ export function branchView(b: Branch, queuePosition: number | null = null): Reco
     total_input_tokens: b.totalInputTokens, total_output_tokens: b.totalOutputTokens, bundle_key: b.bundleKey,
     est_cost_usd: Number(estimateCostUsd(b.modelId, b.totalInputTokens, b.totalOutputTokens).toFixed(4)),
     created_at: b.createdAt.toISOString(), finished_at: b.finishedAt?.toISOString() ?? null,
+    runner: b.runner, oc_session_id: b.ocSessionId, project_dir: b.projectDir,
     ...(queuePosition !== null ? { queue_position: queuePosition } : {}),
   };
 }
@@ -37,6 +38,7 @@ export function stepView(s: Step): Record<string, unknown> {
     id: s.id, branch_id: s.branchId, index: s.stepIndex, kind: s.kind, content: s.content, tool_name: s.toolName,
     tool_args: s.toolArgs, tool_result: s.toolResult, commit_hash: s.commitHash, files_changed: s.filesChanged ?? [],
     input_tokens: s.inputTokens, output_tokens: s.outputTokens, latency_ms: s.latencyMs, note: s.note,
+    oc_message_id: s.ocMessageId ?? null, oc_part_id: s.ocPartId ?? null, classification: s.classification ?? null,
     created_at: s.createdAt.toISOString(),
   };
 }
