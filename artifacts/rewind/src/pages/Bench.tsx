@@ -83,8 +83,8 @@ export default function Bench() {
                           <td className="px-3 py-1.5 text-right" style={{ color: s.fpr > 0.05 ? 'var(--color-warn)' : undefined }}>{pct(s.fpr)}</td>
                           <td className="px-3 py-1.5 text-right text-muted">{s.n_pos ? `${pct(s.rules_tpr)} / ${pct(s.rules_fpr)}` : pct(s.rules_fpr)}</td>
                           <td className="px-3 py-1.5 text-right text-muted">{s.n_pos ? `${pct(s.model_tpr)} / ${pct(s.model_fpr)}` : pct(s.model_fpr)}</td>
-                          <td className="px-3 py-1.5 text-right text-muted">{pct(s.tpr_at_fpr0)}</td>
-                          <td className="px-3 py-1.5 text-right text-muted">{pct(s.tpr_at_fpr1)}</td>
+                          <td className="px-3 py-1.5 text-right text-muted">{s.slice === 'all' || !s.n_pos ? '' : pct(s.tpr_at_fpr0)}</td>
+                          <td className="px-3 py-1.5 text-right text-muted">{s.slice === 'all' || !s.n_pos ? '' : pct(s.tpr_at_fpr1)}</td>
                         </tr>
                       ))}
                     </tbody>
