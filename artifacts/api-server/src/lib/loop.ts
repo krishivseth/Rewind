@@ -7,6 +7,7 @@ import * as git from "./gitwrap";
 import { logger } from "./logger";
 import { messagesFromSteps, type ToolCall } from "./messages";
 import { publish } from "./pubsub";
+import { scheduleClassification } from "./security/service";
 import * as tools from "./tools";
 import * as worktree from "./worktree";
 
@@ -56,7 +57,7 @@ async function setStatus(branchId: string, status: Branch["status"], opts: { err
 }
 
 async function recordStep(branchId: string, fields: Omit<typeof steps.$inferInsert, "branchId" | "stepIndex">): Promise<Step> {
-  return db.transaction(async (tx) => {
+  const row = await db.transaction(async (tx) => {
     const [b] = await tx.select().from(branches).where(eq(branches.id, branchId)).for("update");
     const [row] = await tx.insert(steps).values({ ...fields, branchId, stepIndex: b!.stepCount }).returning();
     await tx.update(branches).set({
@@ -67,6 +68,9 @@ async function recordStep(branchId: string, fields: Omit<typeof steps.$inferInse
     publish(branchId, { type: "step", data: stepView(row!) });
     return row!;
   });
+  // after the transaction commits, so the classifier reads a committed row
+  if (row.kind === "tool_result") scheduleClassification(branchId, row.stepIndex);
+  return row;
 }
 
 const shortArgs = (name: string, args: Record<string, unknown>) => String(name === "run" ? args.command ?? "" : args.path ?? "").slice(0, 80);

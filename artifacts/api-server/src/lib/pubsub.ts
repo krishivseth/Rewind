@@ -1,5 +1,5 @@
 /** In-process pubsub keyed by branch id. */
-export interface BranchEvent { type: "step" | "status"; data: Record<string, unknown> }
+export interface BranchEvent { type: "step" | "status" | "classification"; data: Record<string, unknown> }
 type Listener = (event: BranchEvent) => void;
 const subs = new Map<string, Set<Listener>>();
 
