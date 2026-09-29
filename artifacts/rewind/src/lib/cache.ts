@@ -1,4 +1,14 @@
-import type { Branch, SessionDetail, Step } from '../api'
+import type { Branch, Classification, SessionDetail, Step } from '../api'
+
+/** Attach a classification to the step at `index`; untouched list when the step is not loaded. */
+export function applyClassification(list: Step[] | undefined, index: number, c: Classification): Step[] | undefined {
+  if (!list) return list
+  const i = list.findIndex((s) => s.index === index)
+  if (i < 0) return list
+  const next = list.slice()
+  next[i] = { ...next[i], classification: c }
+  return next
+}
 
 /** Insert or replace a step by index, keeping the list ordered. */
 export function mergeStep(list: Step[] | undefined, step: Step): Step[] {

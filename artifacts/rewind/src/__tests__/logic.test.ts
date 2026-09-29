@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { Branch, Step } from '../api'
-import { bumpStepCount, forkLabels, mergeStep, patchBranch } from '../lib/cache'
+import type { Branch, Classification, Step } from '../api'
+import { applyClassification, bumpStepCount, forkLabels, mergeStep, patchBranch } from '../lib/cache'
+import { level, reasonLabel, worstLevel } from '../lib/classification'
 import { firstDivergence, resolveStep, stepSignature } from '../lib/compare'
 import { stepTitle, summarizeCall } from '../lib/steps'
 
@@ -74,5 +75,37 @@ describe('cache merging', () => {
     expect(labels.get('b')).toBe('fork 2')
     expect(labels.get('c')).toBe('fork 1')
     expect(labels.has('r')).toBe(false)
+  })
+})
+
+const cls = (extra: Partial<Classification> = {}): Classification => ({
+  flag: false, reasons: [], injection: 0.05, effect: 'pure', effect_conf: 0.9, severity: 0.1, ...extra,
+})
+
+describe('classification', () => {
+  it('levels', () => {
+    expect(level(undefined)).toBe('none')
+    expect(level(cls())).toBe('none')
+    expect(level(cls({ effect: 'external', severity: 1.5 }))).toBe('watch')
+    expect(level(cls({ flag: true, reasons: ['egress'] }))).toBe('flag')
+    expect(level(cls({ reasons: ['classifier_error'] }))).toBe('error')
+  })
+  it('labels', () => {
+    expect(reasonLabel('instruction_phrase')).toBe('instruction phrase')
+    expect(reasonLabel('egress')).toBe('network egress')
+    expect(reasonLabel('whatever')).toBe('whatever')
+  })
+  it('worst level over a branch', () => {
+    const list = [step(0, 'user'), step(1, 'tool_result', { classification: cls({ effect: 'external' }) }), step(2, 'tool_result', { classification: cls({ flag: true, reasons: ['severity'] }) })]
+    expect(worstLevel(list)).toBe('flag')
+    expect(worstLevel([step(0, 'user')])).toBe('none')
+  })
+  it('applyClassification annotates the matching index only', () => {
+    const list = [step(0, 'user'), step(1, 'tool_result')]
+    const out = applyClassification(list, 1, cls({ flag: true, reasons: ['egress'] }))!
+    expect(out[1].classification?.flag).toBe(true)
+    expect(out[0].classification).toBeUndefined()
+    expect(applyClassification(undefined, 1, cls())).toBeUndefined()
+    expect(applyClassification(list, 7, cls())).toBe(list)
   })
 })

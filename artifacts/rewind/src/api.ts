@@ -2,6 +2,17 @@ import { useAuth } from './store'
 
 export type BranchStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelled'
 export type StepKind = 'user' | 'assistant' | 'tool_call' | 'tool_result'
+export type Runner = 'rewind' | 'opencode'
+/** Security verdict on a tool_result step: enums and numbers, never model text. */
+export interface Classification {
+  flag: boolean
+  reasons: string[]
+  injection: number
+  effect: 'pure' | 'reversible_local' | 'external' | 'unknown'
+  effect_conf: number
+  severity: number
+  source?: 'posthoc' | 'inline'
+}
 
 export interface Branch {
   id: string
@@ -21,6 +32,9 @@ export interface Branch {
   created_at: string
   finished_at: string | null
   queue_position?: number
+  runner?: Runner
+  oc_session_id?: string | null
+  project_dir?: string | null
 }
 
 export interface ToolCall { id: string; type: 'function'; function: { name: string; arguments: string } }
@@ -40,6 +54,9 @@ export interface Step {
   latency_ms: number
   note: string | null
   created_at: string
+  oc_message_id?: string | null
+  oc_part_id?: string | null
+  classification?: Classification | null
 }
 
 export interface SearchHit {
@@ -107,9 +124,9 @@ export const api = {
     try { detail = (await r.json()).detail ?? detail } catch { /* keep */ }
     return { ok: false, detail }
   },
-  createSession: (body: { repo_id: string; title: string; task_prompt: string; model_id: string }) =>
+  createSession: (body: { repo_id: string; title: string; task_prompt: string; model_id: string; runner?: Runner; project_path?: string }) =>
     request<{ id: string; root_branch_id: string; branch: Branch }>('/api/sessions', { method: 'POST', body: JSON.stringify(body) }, true),
-  fork: (branchId: string, body: { step_index: number; model_id: string; edited_task_prompt?: string; count: number }) =>
+  fork: (branchId: string, body: { step_index: number; model_id: string; edited_task_prompt?: string; count: number; mode?: 'investigate' | 'recover' }) =>
     request<ForkResponse>(`/api/branches/${branchId}/fork`, { method: 'POST', body: JSON.stringify(body) }, true),
   cancel: (branchId: string) => request<unknown>(`/api/branches/${branchId}/cancel`, { method: 'POST' }, true),
   setNote: (branchId: string, index: number, note: string | null) =>
