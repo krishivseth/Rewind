@@ -69,6 +69,15 @@ export const settings = {
   githubClientSecret: process.env.GITHUB_CLIENT_SECRET ?? "",
   sessionSecret: process.env.SESSION_SECRET ?? "",
   publicUrl: process.env.PUBLIC_URL ?? "",
+
+  // security classifier (Jev on OpenRouter) and the OpenCode runner
+  jevModel: process.env.JEV_MODEL ?? "typesafe/jev-1.13",
+  classifyMaxChars: num("CLASSIFY_MAX_CHARS", 24_000),
+  inlineGuard: (process.env.REWIND_INLINE_GUARD ?? "0") === "1",
+  opencodeBin: process.env.OPENCODE_BIN ?? "opencode",
+  opencodePortBase: num("OPENCODE_PORT_BASE", 4096),
+  // the only directory tree the opencode runner may be pointed at
+  opencodeProjectsRoot: process.env.OPENCODE_PROJECTS_ROOT ?? "/tmp/rewind/projects",
 };
 
 export interface Model {
