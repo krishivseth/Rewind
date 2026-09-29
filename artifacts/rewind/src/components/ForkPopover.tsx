@@ -14,7 +14,10 @@ export default function ForkPopover({ branch, stepIndex, onClose }: Props) {
   const [model, setModel] = useState(branch.model_id)
   const [prompt, setPrompt] = useState(branch.task_prompt)
   const [count, setCount] = useState(1)
+  const [mode, setMode] = useState<'investigate' | 'recover'>('investigate')
   const [result, setResult] = useState<ForkResponse | null>(null)
+  // an OpenCode branch is recorded, not driven: the fork keeps its model and prompt, and is key-only
+  const oc = branch.runner === 'opencode'
   const [showKey, setShowKey] = useState(false)
   const selectBranch = useSelection((s) => s.selectBranch)
   const signedIn = !!stats.data?.me
@@ -32,10 +35,9 @@ export default function ForkPopover({ branch, stepIndex, onClose }: Props) {
   }, [onClose])
 
   const fork = useMutation({
-    mutationFn: () => api.fork(branch.id, {
-      step_index: stepIndex, model_id: effectiveModel, count,
-      edited_task_prompt: prompt !== branch.task_prompt ? prompt : undefined,
-    }),
+    mutationFn: () => api.fork(branch.id, oc
+      ? { step_index: stepIndex, model_id: branch.model_id, count: 1, mode }
+      : { step_index: stepIndex, model_id: effectiveModel, count, edited_task_prompt: prompt !== branch.task_prompt ? prompt : undefined }),
     onSuccess: async (res) => {
       setResult(res)
       await qc.invalidateQueries({ queryKey: ['session', branch.session_id] })
@@ -49,7 +51,12 @@ export default function ForkPopover({ branch, stepIndex, onClose }: Props) {
         <button className="btn ml-auto" onClick={onClose}>Close <kbd>Esc</kbd></button>
       </div>
       <div className="p-3 space-y-3">
-        {needsSignIn && !showKey ? (
+        {oc && !key ? (
+          <div className="space-y-2">
+            <p className="text-[12px] text-muted">Forking a recorded OpenCode session needs the access key.</p>
+            <AccessKeyPrompt compact />
+          </div>
+        ) : needsSignIn && !showKey ? (
           <div className="space-y-2">
             <p className="text-[12px] text-muted">Sign in with GitHub to run {models.data?.find((m) => m.cheap)?.name ?? 'the cheap model'} here, within a shared daily budget. Nothing is stored beyond your login name.</p>
             <div className="flex items-center gap-3">
@@ -77,6 +84,25 @@ export default function ForkPopover({ branch, stepIndex, onClose }: Props) {
               <button className="btn" onClick={onClose}>Stay here</button>
             </div>
           </div>
+        ) : oc ? (
+          <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); fork.mutate() }}>
+            <div className="space-y-1">
+              <span className="text-[11px] text-muted">Mode</span>
+              <div className="flex gap-1">
+                {(['investigate', 'recover'] as const).map((m) => (
+                  <button type="button" key={m} className={`btn mono ${mode === m ? 'btn-accent' : ''}`} onClick={() => setMode(m)}>{m}</button>
+                ))}
+              </div>
+              <p className="text-[11px] text-faint">
+                {mode === 'investigate'
+                  ? 'Blind: same context up to this step, files restored, the model continues. Use it to prove what a later step caused.'
+                  : 'Informed: files restored, plus a ledger of what the parent did after this step (reverted, persistent, reusable). Flagged content is redacted to reasons.'}
+              </p>
+            </div>
+            {stats.data?.writes === 'read_only' && <p className="text-[12px] text-muted">This deployment is read-only.</p>}
+            {fork.error && <p className="text-[12px] text-bad">{(fork.error as Error).message}</p>}
+            <button className="btn btn-accent" disabled={fork.isPending || stats.data?.writes === 'read_only'}>{fork.isPending ? 'Forking…' : `Fork (${mode})`}</button>
+          </form>
         ) : (
           <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); fork.mutate() }}>
             {publicMode && (

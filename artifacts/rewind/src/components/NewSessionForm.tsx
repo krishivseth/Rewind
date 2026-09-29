@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api } from '../api'
+import { api, type Runner } from '../api'
 import { useAuth, useSelection } from '../store'
 import AccessKeyPrompt from './AccessKeyPrompt'
 
@@ -14,6 +14,8 @@ export default function NewSessionForm({ onClose }: { onClose: () => void }) {
   const [modelId, setModelId] = useState('')
   const [task, setTask] = useState('')
   const [title, setTitle] = useState('')
+  const [runner, setRunner] = useState<Runner>('rewind')
+  const [projectPath, setProjectPath] = useState('')
   const nav = useNavigate()
   const qc = useQueryClient()
   const selectBranch = useSelection((s) => s.selectBranch)
@@ -31,6 +33,7 @@ export default function NewSessionForm({ onClose }: { onClose: () => void }) {
     mutationFn: () => api.createSession({
       repo_id: repo!.id, model_id: model, task_prompt: task.trim(),
       title: title.trim() || `${repo!.slug}: ${task.trim().slice(0, 60)}`,
+      runner, project_path: runner === 'opencode' ? projectPath.trim() : undefined,
     }),
     onSuccess: (res) => {
       void qc.invalidateQueries({ queryKey: ['sessions'] })
@@ -78,7 +81,23 @@ export default function NewSessionForm({ onClose }: { onClose: () => void }) {
                   {models.data?.map((m) => <option key={m.id} value={m.id}>{m.name}{m.cheap ? ' (cheap)' : ''}</option>)}
                 </select>
               </label>
+              {key && (
+                <label className="block space-y-1">
+                  <span className="text-[11px] text-muted">Runner</span>
+                  <select className="field mono" value={runner} onChange={(e) => setRunner(e.target.value as Runner)}>
+                    <option value="rewind">rewind (built-in loop)</option>
+                    <option value="opencode">opencode (recorded)</option>
+                  </select>
+                </label>
+              )}
             </div>
+            {key && runner === 'opencode' && (
+              <label className="block space-y-1">
+                <span className="text-[11px] text-muted">Project directory <span className="text-faint">under the server's OPENCODE_PROJECTS_ROOT</span></span>
+                <input className="field mono" value={projectPath} onChange={(e) => setProjectPath(e.target.value)} placeholder="my-project" />
+                <span className="text-[11px] text-faint">OpenCode runs in this directory; Rewind snapshots it after every tool call and flags every tool result. The repository field is ignored.</span>
+              </label>
+            )}
             <label className="block space-y-1">
               <span className="text-[11px] text-muted">Task for the agent</span>
               <textarea className="field min-h-[80px] resize-y" placeholder="Make all tests pass" value={task} onChange={(e) => setTask(e.target.value)} autoFocus />
@@ -91,7 +110,7 @@ export default function NewSessionForm({ onClose }: { onClose: () => void }) {
             {stats.data?.writes === 'read_only' && <p className="text-[12px] text-muted">This deployment is read-only.</p>}
             {create.error && <p className="text-[12px] text-bad">{(create.error as Error).message}</p>}
             <div className="flex items-center gap-3">
-              <button className="btn btn-accent" disabled={create.isPending || !repo || !task.trim() || (stats.data?.writes !== undefined && stats.data.writes !== 'open')}>{create.isPending ? 'Starting…' : 'Start session'}</button>
+              <button className="btn btn-accent" disabled={create.isPending || !repo || !task.trim() || (runner === 'opencode' && !projectPath.trim()) || (stats.data?.writes !== undefined && stats.data.writes !== 'open')}>{create.isPending ? 'Starting…' : 'Start session'}</button>
               <span className="text-[11px] text-faint">Runs up to 30 model calls, then stops. Fork it from any step afterwards.</span>
             </div>
           </form>
