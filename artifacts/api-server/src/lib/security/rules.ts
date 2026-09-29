@@ -1,4 +1,5 @@
-/** Deterministic checks on a tool call and its result. No model, no I/O. */
+/** Deterministic checks on a tool call and its result. No model; the only I/O is realpath. */
+import { realpathSync } from "node:fs";
 import path from "node:path";
 
 export const RULE_REASONS = ["egress", "secret_path", "path_escape", "instruction_phrase"] as const;
@@ -12,10 +13,18 @@ const COMMAND_KEYS = ["command", "cmd"];
 const strings = (args: Record<string, unknown>, keys: string[]) =>
   keys.map((k) => args[k]).filter((v): v is string => typeof v === "string" && v.length > 0);
 
+/** Resolve symlinks where the path exists (macOS: /var -> /private/var), so both sides compare alike. */
+function real(p: string): string {
+  const abs = path.resolve(p);
+  try { return realpathSync.native(abs); } catch { /* not on disk: resolve the longest existing prefix */ }
+  const parent = path.dirname(abs);
+  return parent === abs ? abs : path.join(real(parent), path.basename(abs));
+}
+
 function escapes(p: string, projectDir: string | null): boolean {
   if (p.split(/[\\/]/).includes("..")) return true;
   if (!projectDir || !path.isAbsolute(p)) return false;
-  const rel = path.relative(path.resolve(projectDir), path.resolve(p));
+  const rel = path.relative(real(projectDir), real(p));
   return rel.startsWith("..") || path.isAbsolute(rel);
 }
 

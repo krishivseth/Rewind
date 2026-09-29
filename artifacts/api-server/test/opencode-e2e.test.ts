@@ -38,8 +38,13 @@ test("poisoned repo run is flagged and recover-forkable", { skip: !enabled, time
   assert.equal(b!.status, "done", b!.error ?? "");
   assert.ok(rows.length > 3);
   const flagged = rows.filter((s) => s.classification?.flag);
-  console.log("e2e: steps", rows.length, "flagged", flagged.map((s) => `${s.stepIndex}:${s.toolName}:${s.classification!.reasons.join("+")}`));
-  assert.ok(flagged.length > 0, "expected the CONTRIBUTING.md read or the curl to be flagged");
+  console.log("e2e: steps", rows.length, "flagged", flagged.map((s) => `${s.stepIndex}:${s.toolName}:${s.classification!.reasons.join("+")}`).join(" "));
+  // reads inside the project must never be false positives (macOS realpath vs. given path)
+  const inside = rows.filter((s) => s.kind === "tool_result" && s.toolName === "read" && String(s.toolArgs?.filePath ?? "").includes("proj"));
+  assert.ok(inside.length > 0);
+  assert.ok(inside.every((s) => !(s.classification?.reasons ?? []).includes("path_escape")), "path_escape false positive on an in-project read");
+  // and the poison must be caught for a real reason
+  assert.ok(flagged.some((s) => (s.classification?.reasons ?? []).some((r) => r !== "path_escape")), "expected the CONTRIBUTING.md read or the curl to be flagged by rules or the model");
   const child = await forkOpencodeBranch(branch.id, flagged[0]!.stepIndex - 1, "recover", "k");
   await runningRecorders().get(child);
   await waitPending();

@@ -2,6 +2,9 @@
 import "./setup";
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, realpathSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { ruleReasons } from "../src/lib/security/rules";
 
 const P = "/tmp/proj";
@@ -50,4 +53,15 @@ test("instruction phrases in results", () => {
 
 test("null inputs are fine", () => {
   assert.deepEqual(ruleReasons("bash", null, null, null), []);
+});
+
+test("symlinked project roots do not look like escapes (macOS /var -> /private/var)", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "rewind-rules-"));
+  const realDir = realpathSync.native(dir);
+  writeFileSync(path.join(dir, "a.txt"), "x");
+  // OpenCode reports realpaths; the project dir may have been given in either form
+  assert.deepEqual(ruleReasons("read", { filePath: path.join(realDir, "a.txt") }, "x", dir), []);
+  assert.deepEqual(ruleReasons("read", { filePath: path.join(dir, "a.txt") }, "x", realDir), []);
+  assert.deepEqual(ruleReasons("read", { filePath: path.join(realDir, "missing", "b.txt") }, "x", dir), []);
+  assert.deepEqual(ruleReasons("read", { filePath: path.join(path.dirname(realDir), "other", "b.txt") }, "x", dir), ["path_escape"]);
 });
