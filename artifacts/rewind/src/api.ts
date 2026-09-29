@@ -84,6 +84,16 @@ export interface ContextAtStep { step_index: number; requested_index: number; me
 export interface DiffResult { a: { branch_id: string; step_index: number; commit: string }; b: { branch_id: string; step_index: number; commit: string }; files: string[]; patch: string }
 export interface ForkResponse { requested_step_index: number; fork_step_index: number; snapped: boolean; branches: Branch[] }
 
+export interface BenchSlice { slice: string; n_pos: number; n_neg: number; tpr: number; fpr: number; rules_tpr: number; rules_fpr: number; model_tpr: number; model_fpr: number; tpr_at_fpr0: number; tpr_at_fpr1: number; tpr_at_fpr5: number }
+export interface BenchSample { id: string; slice: string; category: string; tool: string; label: 0 | 1; outcome: 'hit' | 'miss' | 'false_positive' | 'true_negative'; text: string; classification: Classification }
+export interface BenchData {
+  generated_at: string; model: string; thresholds: { injection: number; severity: number }; total: number; errors: number
+  slices: BenchSlice[]; categories: { key: string; hit: number; n: number }[]
+  baselines: { detector: string; agentdojo: [number, number]; injecagent: [number, number]; hard_negatives_fpr: number }[]
+  samples: BenchSample[]
+}
+export interface BenchTry { classification: Classification; rules: string[]; ms: number }
+
 export class ApiError extends Error {
   status: number
   constructor(status: number, message: string) { super(message); this.status = status }
@@ -136,6 +146,8 @@ export const api = {
   search: (q: string) => request<{ q: string; results: SearchHit[] }>(`/api/search?q=${encodeURIComponent(q)}`),
   stats: () => request<Stats>('/api/stats'),
   logout: () => request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
+  bench: () => request<BenchData>('/api/bench'),
+  benchTry: (tool: string, text: string) => request<BenchTry>('/api/bench/classify', { method: 'POST', body: JSON.stringify({ tool, text }) }, true),
 }
 
 export const TERMINAL: BranchStatus[] = ['done', 'failed', 'cancelled']

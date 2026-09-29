@@ -16,6 +16,7 @@ export default function TopBar({ children }: { children?: ReactNode }) {
       <Link to="/" className="flex items-center gap-2 mono text-[11px] uppercase tracking-[.2em] text-ink hover:text-accent">
         <span className="inline-block h-2 w-2 bg-accent" />rewind
       </Link>
+      <Link to="/bench" className="mono text-[11px] text-muted hover:text-ink shrink-0" title="How the tool-result classifier scores on public injection corpora">Benchmark</Link>
       {children}
       {s?.writes === 'warming_up' && <span className="mono text-[10px] uppercase tracking-wider text-k-call" title={s.sandbox_python?.error ?? ''}>sandbox warming up</span>}
       {s?.writes === 'read_only' && <span className="mono text-[10px] uppercase tracking-wider text-muted shrink-0">read-only</span>}

@@ -1,11 +1,11 @@
 /** All /api routes. Response shapes use snake_case, matching the frontend types. */
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { Router, type IRouter, type Request, type Response } from "express";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { branches, db, repos, sessions, steps, type Branch } from "@workspace/db";
-import { MODELS, MODEL_IDS, settings } from "../lib/config";
+import { MODELS, MODEL_IDS, repoRoot, settings } from "../lib/config";
 import { createForks } from "../lib/fork";
 import { branchView, isCancelRequested, requestCancel, stepView } from "../lib/loop";
 import { publish, subscribe } from "../lib/pubsub";
@@ -258,6 +258,26 @@ router.post("/classify", wrap(async (req, res) => {
   const rules = ruleReasons(body.tool, body.args, body.result ?? null, body.project_dir ?? null);
   const d = await getClassifier().decide(renderState(body.tool, body.args, body.result ?? null, settings.classifyMaxChars));
   res.json({ ...verdict(rules, d), source: "inline" });
+}));
+
+// --- classifier benchmark ----------------------------------------------------------------------
+// bench/sample.json is written by bench/detector.ts from one recorded run over public corpora.
+let benchCache: { mtime: number; data: unknown } | null = null;
+router.get("/bench", wrap(async (_req, res) => {
+  const p = path.join(repoRoot, "artifacts/api-server/bench/sample.json");
+  if (!existsSync(p)) throw new HttpError(404, "no benchmark run recorded on this server (run bench/detector.ts)");
+  const mtime = statSync(p).mtimeMs;
+  if (!benchCache || benchCache.mtime !== mtime) benchCache = { mtime, data: JSON.parse(readFileSync(p, "utf8")) };
+  res.json(benchCache.data);
+}));
+
+const BenchTry = z.object({ tool: z.string().max(128).default("tool"), text: z.string().min(1).max(200_000) });
+router.post("/bench/classify", requireKey, wrap(async (req, res) => {
+  const body = BenchTry.parse(req.body);
+  const t0 = Date.now();
+  const rules = ruleReasons(body.tool, {}, body.text, null);
+  const d = await getClassifier().decide(renderState(body.tool, {}, body.text, settings.classifyMaxChars));
+  res.json({ classification: { ...verdict(rules, d), source: "posthoc" }, rules, ms: Date.now() - t0 });
 }));
 
 router.delete("/sessions/:id", requireKey, wrap(async (req, res) => {

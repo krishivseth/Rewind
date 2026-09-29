@@ -28,7 +28,7 @@ function Meter({ label, value, max, color, note }: { label: string; value: numbe
  * The verdict on a tool result, shown in the step body when there is something to say. Numbers
  * come from the model, reasons from rules and thresholds; the two buttons act on the finding.
  */
-export default function SecurityVerdict({ c, runner, onFork }: { c: Classification; runner: Runner | undefined; onFork: (mode: 'investigate' | 'recover' | null) => void }) {
+export default function SecurityVerdict({ c, runner, onFork, hideActions = false }: { c: Classification; runner: Runner | undefined; onFork: (mode: 'investigate' | 'recover' | null) => void; hideActions?: boolean }) {
   const l = level(c)
   if (l === 'none') return null
   const color = LEVEL_COLOR[l]
@@ -65,7 +65,7 @@ export default function SecurityVerdict({ c, runner, onFork }: { c: Classificati
               ? 'No rule matched; the model raised this on its own. The model can raise a flag but never clear one.'
               : l === 'error' ? 'The classifier could not be reached, so only the rules ran on this step.' : 'Below the flag threshold, shown because the effect reaches outside the working tree.'}
       </p>
-      {l !== 'error' && (
+      {l !== 'error' && !hideActions && (
         <div className="flex flex-wrap items-center gap-2">
           {oc ? (
             <>

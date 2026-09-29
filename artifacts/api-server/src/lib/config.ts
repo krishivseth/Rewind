@@ -19,7 +19,7 @@ function findRepoRoot(): string {
   }
   return process.cwd();
 }
-const repoRoot = findRepoRoot();
+export const repoRoot = findRepoRoot();
 // relative paths are relative to the repository root, whatever the working directory is
 function resolveFromRoot(p: string): string {
   return path.isAbsolute(p) ? p : path.resolve(repoRoot, p);
