@@ -61,3 +61,7 @@ The product should remain dark, dense, monospace-forward, and focused on debuggi
 
 - See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
 - See `DECISIONS.md` for the deliberate first-slice tradeoffs and follow-up phases.
+- `artifacts/api-server/src/lib/opencode/` — OpenCode runner: translator, client and server manager, snapshot store, recorder, session start and fork
+- `artifacts/api-server/src/lib/security/` — rules, Jev classifier, post-hoc service, recover-fork ledger
+- `.opencode/plugins/rewind.ts` — inline guard plugin (copy into the project OpenCode runs in)
+- Env for these: `JEV_MODEL`, `CLASSIFY_MAX_CHARS`, `REWIND_INLINE_GUARD`, `OPENCODE_BIN`, `OPENCODE_PORT_BASE`, `OPENCODE_PROJECTS_ROOT`

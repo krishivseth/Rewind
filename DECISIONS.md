@@ -196,3 +196,23 @@ Choices the spec left open, and what this codebase does about them.
     a budget is a pause they can resume, not a red failure on a demo.
 59. **The system prompt covers the no-tests case**: write a small pytest file; "no tests ran" is not
     a failure. Both this and the placeholder test came from watching a signed-in run on staging.
+
+## OpenCode runner and security flags (2026-09-28)
+
+- OpenCode owns the loop; Rewind records. Files are snapshotted by Rewind (per tool call, into a
+  Rewind-owned git object store under `DATA_DIR/snapshots/<session>`) and OpenCode's own snapshots
+  are disabled (`snapshot: false`), so there is one source of truth for file state.
+- Fork granularity is a complete model-call round, which is both Rewind's `validBoundary` and one
+  OpenCode assistant message, so `fork {messageID of the next message}` is exact and
+  `revert {partID}` is not needed. An investigate fork continues with `parts: []`, which inserts an
+  empty user message; that is the one known context difference from the parent.
+- The opencode runner is key-only and confined to `OPENCODE_PROJECTS_ROOT`, because it names a
+  directory on the server. Visitors cannot start or fork OpenCode branches.
+- The classifier stores enums and numbers only. Rules or the model can raise a flag; nothing can
+  clear one. Thresholds: injection > 0.5, severity >= 3 (of 4). A classifier error is recorded as
+  `classifier_error` and never counts as a flag.
+- The ledger never contains tool result text; flagged steps contribute only reason enums.
+- Subagent child sessions are not followed; compaction is disabled for recorded sessions.
+- A fork whose parent has no snapshot store initialises a fresh one instead of failing.
+- Inline mode (`REWIND_INLINE_GUARD=1` plus `.opencode/plugins/rewind.ts` copied into the project)
+  consults the classifier only for `bash`, `webfetch`, MCP tools and results over 2k characters.
