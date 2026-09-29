@@ -14,6 +14,8 @@ import * as services from "../lib/services";
 import { requireKey, requireKeyOrPublic, takeBranchQuota, validKey } from "../middlewares/access-key";
 import { logger } from "../lib/logger";
 import { sandboxPythonStatus } from "../lib/sandbox-python";
+import { getClassifier, renderState, verdict } from "../lib/security/classify";
+import { ruleReasons } from "../lib/security/rules";
 import { finishLogin, githubConfigured, logout, startLogin, type SessionUser } from "../lib/auth";
 
 const router: IRouter = Router();
@@ -232,6 +234,21 @@ router.put("/branches/:id/steps/:index/note", requireKey, wrap(async (req, res) 
   const view = stepView(step);
   publish(b.id, { type: "step", data: view });
   res.json(view);
+}));
+
+// Inline guard for the OpenCode plugin (.opencode/plugins/rewind.ts): rules plus the model on one
+// call or result, before it runs or before the model sees it. Read-only, localhost, and absent
+// (404) unless REWIND_INLINE_GUARD is on, so the surface does not exist when unused.
+const ClassifyBody = z.object({
+  tool: z.string().max(128), args: z.record(z.unknown()).default({}),
+  result: z.string().max(200_000).nullish(), project_dir: z.string().nullish(),
+});
+router.post("/classify", wrap(async (req, res) => {
+  if (!settings.inlineGuard) throw new HttpError(404, "not found");
+  const body = ClassifyBody.parse(req.body);
+  const rules = ruleReasons(body.tool, body.args, body.result ?? null, body.project_dir ?? null);
+  const d = await getClassifier().decide(renderState(body.tool, body.args, body.result ?? null, settings.classifyMaxChars));
+  res.json({ ...verdict(rules, d), source: "inline" });
 }));
 
 router.delete("/sessions/:id", requireKey, wrap(async (req, res) => {
