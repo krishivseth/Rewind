@@ -1,4 +1,6 @@
 /** All /api routes. Response shapes use snake_case, matching the frontend types. */
+import { existsSync, statSync } from "node:fs";
+import path from "node:path";
 import { Router, type IRouter, type Request, type Response } from "express";
 import { asc, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
@@ -136,7 +138,21 @@ router.get("/auth/check", (req, res) => {
 // --- write -----------------------------------------------------------------------------------
 
 const modelId = z.string().refine((v) => MODEL_IDS.has(v), "unknown model");
-const CreateSession = z.object({ repo_id: z.string(), title: z.string().min(1).max(256), task_prompt: z.string().min(1).max(20_000), model_id: modelId });
+const CreateSession = z.object({
+  repo_id: z.string(), title: z.string().min(1).max(256), task_prompt: z.string().min(1).max(20_000), model_id: modelId,
+  runner: z.enum(["rewind", "opencode"]).default("rewind"), project_path: z.string().max(1024).optional(),
+});
+
+/** The opencode runner names a directory on this machine: key holders only, and only under the projects root. */
+function resolveProjectDir(raw: string | undefined): string {
+  if (!raw) throw new HttpError(400, "project_path is required for the opencode runner");
+  const root = path.resolve(settings.opencodeProjectsRoot);
+  const dir = path.resolve(root, raw);
+  const rel = path.relative(root, dir);
+  if (rel.startsWith("..") || path.isAbsolute(rel)) throw new HttpError(400, `project_path must be inside ${root}`);
+  if (!existsSync(dir) || !statSync(dir).isDirectory()) throw new HttpError(400, "project_path must be an existing directory");
+  return dir;
+}
 const ForkBody = z.object({ step_index: z.number().int().min(0), model_id: modelId, edited_task_prompt: z.string().max(20_000).nullish(), count: z.number().int().min(1).max(5).default(1) });
 const NoteBody = z.object({ note: z.string().max(2000).nullish() });
 
@@ -154,10 +170,19 @@ const quota = (req: Request, res: Response, n: number) => {
 router.post("/sessions", requireKeyOrPublic, wrap(async (req, res) => {
   const body = CreateSession.parse(req.body);
   await checkDailyCap(res.locals.public === true);
+  let projectDir: string | undefined;
+  if (body.runner === "opencode") {
+    if (res.locals.public === true) throw new HttpError(401, "the opencode runner needs the access key");
+    projectDir = resolveProjectDir(body.project_path);
+  }
   quota(req, res, 1);
   let created;
-  try { created = await services.createSession(parseId(body.repo_id), body.title, body.task_prompt, body.model_id, res.locals.keyId as string); }
-  catch (e) { if ((e as Error).message === "repo not found") throw new HttpError(404, "repo not found"); throw e; }
+  try { created = await services.createSession(parseId(body.repo_id), body.title, body.task_prompt, body.model_id, res.locals.keyId as string, { runner: body.runner, projectDir }); }
+  catch (e) {
+    if ((e as Error).message === "repo not found") throw new HttpError(404, "repo not found");
+    if (body.runner === "opencode") throw new HttpError(502, `could not start opencode session: ${(e as Error).message}`);
+    throw e;
+  }
   res.status(201).json({ id: created.session.id, root_branch_id: created.branch.id, branch: bview(created.branch) });
 }));
 

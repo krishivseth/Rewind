@@ -63,16 +63,33 @@ export async function recoverStaleBranches(all = false): Promise<number> {
   return rows.length;
 }
 
-export async function createSession(repoId: string, title: string, taskPrompt: string, modelId: string, createdBy: string | null): Promise<{ session: Session; branch: Branch }> {
+export interface CreateSessionOptions {
+  /** "rewind" (default) drives the built-in loop; "opencode" records an external `opencode serve` session. */
+  runner?: "rewind" | "opencode";
+  projectDir?: string;
+  ocClient?: import("./opencode/client").OpenCodeClient;
+}
+
+export async function createSession(repoId: string, title: string, taskPrompt: string, modelId: string, createdBy: string | null, opts: CreateSessionOptions = {}): Promise<{ session: Session; branch: Branch }> {
   const [repo] = await db.select().from(repos).where(eq(repos.id, repoId));
   if (!repo) throw new Error("repo not found");
+  const runner = opts.runner ?? "rewind";
   const result = await db.transaction(async (tx) => {
     const [session] = await tx.insert(sessions).values({ repoId, title }).returning();
-    const [branch] = await tx.insert(branches).values({ sessionId: session!.id, modelId, systemPrompt: SYSTEM_PROMPT, taskPrompt, status: "queued", createdBy }).returning();
+    const [branch] = await tx.insert(branches).values({
+      sessionId: session!.id, modelId, systemPrompt: SYSTEM_PROMPT, taskPrompt, status: "queued", createdBy,
+      runner, projectDir: opts.projectDir ?? null,
+    }).returning();
     const [updated] = await tx.update(sessions).set({ rootBranchId: branch!.id }).where(eq(sessions.id, session!.id)).returning();
     return { session: updated!, branch: branch! };
   });
-  void scheduler.enqueue(result.branch.id);
+  if (runner === "opencode") {
+    const { startOpencodeBranch } = await import("./opencode/session");
+    await startOpencodeBranch(result.branch.id, opts.ocClient);
+    result.branch = (await getBranch(result.branch.id))!;
+  } else {
+    void scheduler.enqueue(result.branch.id);
+  }
   return result;
 }
 
