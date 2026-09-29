@@ -35,6 +35,7 @@ export interface Branch {
   runner?: Runner
   oc_session_id?: string | null
   project_dir?: string | null
+  flag_count?: number
 }
 
 export interface ToolCall { id: string; type: 'function'; function: { name: string; arguments: string } }

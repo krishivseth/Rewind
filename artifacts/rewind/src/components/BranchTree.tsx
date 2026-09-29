@@ -66,6 +66,11 @@ export default function BranchTree({ branches, selected, diffOther, onSelect, on
             <StatusBadge branch={b} />
             <span className="mono">{b.step_count} steps</span>
             {b.fork_step_index !== null && <span className="mono text-faint">at {b.fork_step_index}</span>}
+            {(b.flag_count ?? 0) > 0 && (
+              <span className="mono px-1 text-[10px]" style={{ background: 'var(--color-bad)', color: 'var(--color-bg)' }} title="flagged tool results">
+                {b.flag_count} {b.flag_count === 1 ? 'flag' : 'flags'}
+              </span>
+            )}
           </span>
         </button>
         {kids.length > 1 && (

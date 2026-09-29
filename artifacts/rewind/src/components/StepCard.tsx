@@ -1,11 +1,25 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import { api, type Step } from '../api'
+import { api, type Runner, type Step } from '../api'
 import { mergeStep } from '../lib/cache'
 import { useAuth } from '../store'
-import { LEVEL_COLOR, level, reasonLabel } from '../lib/classification'
+import { LEVEL_COLOR, findInstructionPhrase, level, reasonLabel } from '../lib/classification'
 import { KIND_COLOR, KIND_LABEL, fmtTokens, parseArgs, shortHash, summarizeCall } from '../lib/steps'
 import Prose from './Prose'
+import SecurityVerdict from './SecurityVerdict'
+
+/** The result text, with the phrase a rule matched marked so the eye lands on it. */
+function ResultText({ text, highlight }: { text: string; highlight: boolean }) {
+  const hit = highlight ? findInstructionPhrase(text) : null
+  if (!hit) return <>{text}</>
+  return (
+    <>
+      {text.slice(0, hit.start)}
+      <mark style={{ background: 'var(--color-bad-dim)', color: 'var(--color-bad)', outline: '1px solid var(--color-bad)' }}>{text.slice(hit.start, hit.end)}</mark>
+      {text.slice(hit.end)}
+    </>
+  )
+}
 
 function Args({ args }: { args: Record<string, unknown> }) {
   return (
@@ -54,8 +68,9 @@ function NoteEditor({ step }: { step: Step }) {
   )
 }
 
-export default function StepCard({ step, onOpenContext }: { step: Step; onOpenContext: () => void }) {
+export default function StepCard({ step, runner, onOpenContext, onFork }: { step: Step; runner?: Runner; onOpenContext: () => void; onFork?: (mode: 'investigate' | 'recover' | null, before: Step) => void }) {
   const color = KIND_COLOR[step.kind]
+  const ruleHit = !!step.classification?.reasons.includes('instruction_phrase')
   return (
     <article className="flex min-h-0 flex-1 flex-col">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 sm:px-4 py-2 border-b border-line text-[11px] text-muted">
@@ -73,13 +88,9 @@ export default function StepCard({ step, onOpenContext }: { step: Step; onOpenCo
         {step.files_changed.length > 0 && (
           <span className="mono truncate">{step.files_changed.join(', ')}</span>
         )}
-        {step.classification && level(step.classification) !== 'none' && (
-          <span
-            className="rounded px-1.5 py-0.5 text-[10px] font-medium"
-            style={{ background: LEVEL_COLOR[level(step.classification)], color: 'var(--color-bg)' }}
-            title={`injection ${step.classification.injection} · ${step.classification.effect} (${step.classification.effect_conf}) · severity ${step.classification.severity}`}
-          >
-            {level(step.classification) === 'flag' ? 'FLAG' : level(step.classification) === 'watch' ? 'external' : 'classifier error'}
+        {step.classification && level(step.classification) !== 'none' && !onFork && (
+          <span className="px-1.5 py-0.5 text-[10px] font-medium" style={{ background: LEVEL_COLOR[level(step.classification)], color: 'var(--color-bg)' }}>
+            {level(step.classification) === 'flag' ? 'flagged' : level(step.classification) === 'watch' ? 'external' : 'classifier error'}
             {step.classification.reasons.length > 0 && `: ${step.classification.reasons.map(reasonLabel).join(', ')}`}
           </span>
         )}
@@ -117,9 +128,12 @@ export default function StepCard({ step, onOpenContext }: { step: Step; onOpenCo
         )}
         {step.kind === 'tool_result' && (
           <div className="space-y-3">
+            {step.classification && onFork && (
+              <SecurityVerdict c={step.classification} runner={runner} onFork={(mode) => onFork(mode, step)} />
+            )}
             <div className="mono text-[12px] text-muted">{summarizeCall(step.tool_name ?? '', step.tool_args)}</div>
             <pre className="mono text-[12px] leading-[1.5] whitespace-pre-wrap break-words rounded border border-line bg-bg p-3 max-h-full">
-              {step.tool_result ?? ''}
+              <ResultText text={step.tool_result ?? ''} highlight={ruleHit} />
             </pre>
           </div>
         )}

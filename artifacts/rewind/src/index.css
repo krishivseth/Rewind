@@ -20,7 +20,9 @@
   --color-k-call: hsl(38 88% 62%);
   --color-k-result: hsl(174 72% 56%);
   --color-bad: hsl(2 72% 58%);
+  --color-bad-dim: hsl(2 72% 58% / .12);
   --color-warn: hsl(38 88% 58%);
+  --color-warn-dim: hsl(38 88% 58% / .12);
   --color-good: hsl(174 72% 48%);
 }
 

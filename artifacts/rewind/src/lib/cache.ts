@@ -23,6 +23,12 @@ export function bumpStepCount(session: SessionDetail | undefined, branchId: stri
   return { ...session, branches: session.branches.map((b) => (b.id === branchId && b.step_count <= index ? { ...b, step_count: index + 1 } : b)) }
 }
 
+/** A live classification came in flagged: count it on the branch so the tree updates without a refetch. */
+export function bumpFlagCount(session: SessionDetail | undefined, branchId: string): SessionDetail | undefined {
+  if (!session) return session
+  return { ...session, branches: session.branches.map((b) => (b.id === branchId ? { ...b, flag_count: (b.flag_count ?? 0) + 1 } : b)) }
+}
+
 export function patchBranch(session: SessionDetail | undefined, b: Branch): SessionDetail | undefined {
   if (!session) return session
   return { ...session, branches: session.branches.map((x) => (x.id === b.id ? { ...x, ...b } : x)) }

@@ -14,7 +14,10 @@ export default function ForkPopover({ branch, stepIndex, onClose }: Props) {
   const [model, setModel] = useState(branch.model_id)
   const [prompt, setPrompt] = useState(branch.task_prompt)
   const [count, setCount] = useState(1)
-  const [mode, setMode] = useState<'investigate' | 'recover'>('investigate')
+  const presetMode = useSelection((s) => s.forkMode)
+  const [mode, setMode] = useState<'investigate' | 'recover'>(presetMode ?? 'investigate')
+  // a verdict button can re-open the popover with the other mode while it is already mounted
+  useEffect(() => { if (presetMode) setMode(presetMode) }, [presetMode])
   const [result, setResult] = useState<ForkResponse | null>(null)
   // an OpenCode branch is recorded, not driven: the fork keeps its model and prompt, and is key-only
   const oc = branch.runner === 'opencode'

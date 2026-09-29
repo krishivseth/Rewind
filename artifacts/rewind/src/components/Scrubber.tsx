@@ -71,6 +71,7 @@ export default function Scrubber({ steps, index, forkStepIndex, live, onChange, 
           const selected = s.index === index
           const inherited = forkStepIndex !== null && s.index <= forkStepIndex
           const tall = s.kind === 'assistant' ? 22 : s.kind === 'user' ? 22 : s.kind === 'tool_result' && s.commit_hash ? 18 : 12
+          const lvl = level(s.classification)
           return (
             <div
               key={s.id}
@@ -81,10 +82,12 @@ export default function Scrubber({ steps, index, forkStepIndex, live, onChange, 
               <div
                 className="w-full rounded-[1px] transition-[height] duration-100"
                 style={{
-                  height: selected ? 30 : tall,
-                  background: KIND_COLOR[s.kind],
-                  opacity: selected ? 1 : inherited ? 0.35 : 0.75,
-                  boxShadow: selected ? `0 0 0 1px var(--color-bg), 0 0 0 2px ${KIND_COLOR[s.kind]}` : undefined,
+                  height: selected ? 30 : lvl === 'flag' ? Math.max(tall, 22) : tall,
+                  background: lvl === 'flag' || lvl === 'watch' ? LEVEL_COLOR[lvl] : KIND_COLOR[s.kind],
+                  opacity: selected || lvl === 'flag' ? 1 : inherited ? 0.35 : 0.75,
+                  boxShadow: selected
+                    ? `0 0 0 1px var(--color-bg), 0 0 0 2px ${lvl === 'flag' || lvl === 'watch' ? LEVEL_COLOR[lvl] : KIND_COLOR[s.kind]}`
+                    : lvl === 'flag' ? `0 0 0 1px var(--color-bg), 0 0 0 2px ${LEVEL_COLOR.flag}` : undefined,
                 }}
               />
               {s.commit_hash && s.kind === 'tool_result' && (
@@ -93,12 +96,13 @@ export default function Scrubber({ steps, index, forkStepIndex, live, onChange, 
               {s.note && (
                 <span className="absolute top-0 h-[3px] w-[5px] rounded-sm" style={{ background: 'var(--color-accent)' }} title={s.note} />
               )}
-              {level(s.classification) !== 'none' && (
+              {(lvl === 'flag' || lvl === 'watch') && (
                 <span
-                  className="absolute -top-[5px] h-[5px] w-[5px] rounded-full"
-                  style={{ background: LEVEL_COLOR[level(s.classification)] }}
+                  className="absolute -top-[7px] left-1/2 -translate-x-1/2 text-[8px] leading-none"
+                  style={{ color: LEVEL_COLOR[lvl] }}
                   title={s.classification?.reasons.map(reasonLabel).join(', ') || 'external side effect'}
-                />
+                  aria-label={lvl === 'flag' ? 'flagged' : 'external effect'}
+                >▼</span>
               )}
             </div>
           )

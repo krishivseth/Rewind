@@ -17,7 +17,9 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import ContextDrawer from '../components/ContextDrawer'
 import FileTree from '../components/FileTree'
 import Scrubber from '../components/Scrubber'
+import SecurityStrip from '../components/SecurityStrip'
 import StepCard from '../components/StepCard'
+import { forkPointBefore } from '../lib/classification'
 import TopBar from '../components/TopBar'
 import { STOP_LABEL, fmtCost, fmtTokens, isSoftStop, shortModel } from '../lib/steps'
 import { useSelection } from '../store'
@@ -188,6 +190,7 @@ export default function SessionPage() {
               }
             />
           )}
+          {branch && !sel.diffMode && !compareParent && <SecurityStrip steps={steps} index={index} onJump={setStep} />}
           {!hintDismissed && branch && steps.length > 0 && (
             <div className="flex items-center gap-3 border-b border-line bg-accent-dim/40 px-4 py-1.5 text-[12px] text-ink">
               <span>Drag the scrubber or use <kbd>←</kbd> <kbd>→</kbd>. <kbd>C</kbd> shows what the model saw. {!readOnly && <><kbd>F</kbd> forks from this step. </>}Shift-click a second branch to diff.</span>
@@ -207,7 +210,8 @@ export default function SessionPage() {
           ) : sel.diffMode && branch ? (
             <div className="flex flex-1 items-center justify-center text-[12px] text-muted">Diff mode. Shift-click another branch in the tree to compare against it.</div>
           ) : step ? (
-            <StepCard step={step} onOpenContext={() => sel.setContextOpen(true)} />
+            <StepCard step={step} runner={branch?.runner} onOpenContext={() => sel.setContextOpen(true)}
+              onFork={readOnly ? undefined : (mode, before) => { setStep(forkPointBefore(before)); sel.setForkOpen(true, mode ?? undefined) }} />
           ) : (
             <div className="flex flex-1 items-center justify-center text-[12px] text-muted">
               {branch?.status === 'queued' ? 'Queued. Steps appear when the branch starts.' : stepsQ.isLoading ? 'Loading steps…' : 'No steps yet.'}

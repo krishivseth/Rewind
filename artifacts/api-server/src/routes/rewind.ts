@@ -2,7 +2,7 @@
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { Router, type IRouter, type Request, type Response } from "express";
-import { asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { branches, db, repos, sessions, steps, type Branch } from "@workspace/db";
 import { MODELS, MODEL_IDS, settings } from "../lib/config";
@@ -50,7 +50,16 @@ async function sessionView(sessionId: string) {
   const [s] = await db.select({ session: sessions, repo: repos }).from(sessions).innerJoin(repos, eq(sessions.repoId, repos.id)).where(eq(sessions.id, sessionId));
   if (!s) throw new HttpError(404, "session not found");
   const rows = await db.select().from(branches).where(eq(branches.sessionId, sessionId)).orderBy(asc(branches.createdAt));
-  return { id: s.session.id, title: s.session.title, repo_slug: s.repo.slug, repo_id: s.repo.id, root_branch_id: s.session.rootBranchId, created_at: s.session.createdAt.toISOString(), branches: rows.map(bview) };
+  // flagged tool results per branch, so the tree can show a count without loading every branch's steps
+  const flags = rows.length
+    ? await db.select({ branchId: steps.branchId, n: sql<number>`count(*)::int` }).from(steps)
+      .where(and(inArray(steps.branchId, rows.map((b) => b.id)), sql`(${steps.classification}->>'flag')::boolean`)).groupBy(steps.branchId)
+    : [];
+  const flagCount = new Map(flags.map((f) => [f.branchId, f.n]));
+  return {
+    id: s.session.id, title: s.session.title, repo_slug: s.repo.slug, repo_id: s.repo.id, root_branch_id: s.session.rootBranchId,
+    created_at: s.session.createdAt.toISOString(), branches: rows.map((b) => ({ ...bview(b), flag_count: flagCount.get(b.id) ?? 0 })),
+  };
 }
 
 // --- read ------------------------------------------------------------------------------------

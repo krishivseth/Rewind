@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { TERMINAL, isLive, type Branch, type Classification, type SessionDetail, type Step } from '../api'
-import { applyClassification, bumpStepCount, mergeStep, patchBranch } from '../lib/cache'
+import { applyClassification, bumpFlagCount, bumpStepCount, mergeStep, patchBranch } from '../lib/cache'
 
 /**
  * Subscribe to the SSE stream of every live branch in the session and feed the
@@ -32,6 +32,7 @@ export function useSessionEvents(sessionId: string | undefined, branches: Branch
       es.addEventListener('classification', (e) => {
         const { index, classification } = JSON.parse((e as MessageEvent).data).data as { index: number; classification: Classification }
         qc.setQueryData<Step[]>(['steps', branchId], (old) => applyClassification(old, index, classification))
+        if (classification.flag) qc.setQueryData<SessionDetail>(['session', sessionId], (old) => bumpFlagCount(old, branchId))
       })
       return es
     })
