@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
-import { api } from '../api'
+import { api, type Step } from '../api'
+import { LEVEL_COLOR, level, reasonLabel } from '../lib/classification'
 import { fmtTokens } from '../lib/steps'
 
 const ROLE_COLOR: Record<string, string> = {
@@ -38,6 +39,8 @@ function prettyArgs(s: string) { try { return JSON.stringify(JSON.parse(s), null
 
 export default function ContextDrawer({ branchId, index, onClose }: { branchId: string; index: number; onClose: () => void }) {
   const q = useQuery({ queryKey: ['context', branchId, index], queryFn: () => api.context(branchId, index) })
+  const step = useQueryClient().getQueryData<Step[]>(['steps', branchId])?.find((s) => s.index === index)
+  const cls = step?.classification
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -67,6 +70,22 @@ export default function ContextDrawer({ branchId, index, onClose }: { branchId: 
           <button className="btn ml-2" onClick={onClose}>Close <kbd>Esc</kbd></button>
         </div>
         <div className="flex-1 overflow-auto p-3 space-y-2">
+          {cls && (
+            <details className="border border-line rounded bg-bg" open={level(cls) !== 'none'}>
+              <summary className="flex items-center gap-2 px-3 py-1.5 cursor-pointer text-[12px] list-none [&::-webkit-details-marker]:hidden">
+                <span className="h-2 w-2 rounded-full shrink-0" style={{ background: level(cls) === 'none' ? 'var(--color-good)' : LEVEL_COLOR[level(cls)] }} />
+                <span className="text-ink">Security classification</span>
+                <span className="text-faint mono">{cls.source ?? 'posthoc'}</span>
+                <span className="ml-auto text-muted truncate">{cls.reasons.length ? cls.reasons.map(reasonLabel).join(', ') : 'clean'}</span>
+              </summary>
+              <div className="px-3 pb-2 text-[12px] space-y-1">
+                <div>injection <span className="mono">{cls.injection.toFixed(2)}</span></div>
+                <div>effect <span className="mono">{cls.effect}</span> <span className="text-faint">({cls.effect_conf.toFixed(2)})</span></div>
+                <div>severity <span className="mono">{cls.severity.toFixed(2)}</span> <span className="text-faint">/ 4</span></div>
+                <p className="text-faint">Rules run first; the model can raise a flag but never clear one.</p>
+              </div>
+            </details>
+          )}
           {q.isLoading && <p className="text-muted text-[12px]">Loading…</p>}
           {q.error && <p className="text-bad text-[12px]">Could not load context: {(q.error as Error).message}</p>}
           {ctx?.messages.map((m, i) => <MessageCard key={i} m={m} i={i} open={i >= ctx.messages.length - 2} />)}

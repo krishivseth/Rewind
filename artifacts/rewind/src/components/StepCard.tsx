@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { api, type Step } from '../api'
 import { mergeStep } from '../lib/cache'
 import { useAuth } from '../store'
+import { LEVEL_COLOR, level, reasonLabel } from '../lib/classification'
 import { KIND_COLOR, KIND_LABEL, fmtTokens, parseArgs, shortHash, summarizeCall } from '../lib/steps'
 import Prose from './Prose'
 
@@ -71,6 +72,16 @@ export default function StepCard({ step, onOpenContext }: { step: Step; onOpenCo
         )}
         {step.files_changed.length > 0 && (
           <span className="mono truncate">{step.files_changed.join(', ')}</span>
+        )}
+        {step.classification && level(step.classification) !== 'none' && (
+          <span
+            className="rounded px-1.5 py-0.5 text-[10px] font-medium"
+            style={{ background: LEVEL_COLOR[level(step.classification)], color: 'var(--color-bg)' }}
+            title={`injection ${step.classification.injection} · ${step.classification.effect} (${step.classification.effect_conf}) · severity ${step.classification.severity}`}
+          >
+            {level(step.classification) === 'flag' ? 'FLAG' : level(step.classification) === 'watch' ? 'external' : 'classifier error'}
+            {step.classification.reasons.length > 0 && `: ${step.classification.reasons.map(reasonLabel).join(', ')}`}
+          </span>
         )}
         <button className="btn ml-auto" onClick={onOpenContext} title="Show the messages the model saw at this step">Context</button>
       </header>

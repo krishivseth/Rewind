@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Step } from '../api'
+import { LEVEL_COLOR, level, reasonLabel } from '../lib/classification'
 import { KIND_COLOR, KIND_LABEL, shortHash, stepTitle } from '../lib/steps'
 
 interface Props {
@@ -59,6 +60,11 @@ export default function Scrubber({ steps, index, forkStepIndex, live, onChange, 
             <span className="ml-2 text-muted">{stepTitle(steps[hover.index]).slice(0, 60)}</span>
             {steps[hover.index].commit_hash && <span className="ml-2 mono text-faint">{shortHash(steps[hover.index].commit_hash)}</span>}
             {steps[hover.index].note && <span className="ml-2 text-accent">note</span>}
+            {level(steps[hover.index].classification) !== 'none' && (
+              <span className="ml-2" style={{ color: LEVEL_COLOR[level(steps[hover.index].classification)] }}>
+                {steps[hover.index].classification!.reasons.map(reasonLabel).join(', ') || 'external'}
+              </span>
+            )}
           </div>
         )}
         {steps.map((s) => {
@@ -86,6 +92,13 @@ export default function Scrubber({ steps, index, forkStepIndex, live, onChange, 
               )}
               {s.note && (
                 <span className="absolute top-0 h-[3px] w-[5px] rounded-sm" style={{ background: 'var(--color-accent)' }} title={s.note} />
+              )}
+              {level(s.classification) !== 'none' && (
+                <span
+                  className="absolute -top-[5px] h-[5px] w-[5px] rounded-full"
+                  style={{ background: LEVEL_COLOR[level(s.classification)] }}
+                  title={s.classification?.reasons.map(reasonLabel).join(', ') || 'external side effect'}
+                />
               )}
             </div>
           )
