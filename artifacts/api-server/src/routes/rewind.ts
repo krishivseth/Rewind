@@ -153,7 +153,11 @@ function resolveProjectDir(raw: string | undefined): string {
   if (!existsSync(dir) || !statSync(dir).isDirectory()) throw new HttpError(400, "project_path must be an existing directory");
   return dir;
 }
-const ForkBody = z.object({ step_index: z.number().int().min(0), model_id: modelId, edited_task_prompt: z.string().max(20_000).nullish(), count: z.number().int().min(1).max(5).default(1) });
+const ForkBody = z.object({
+  step_index: z.number().int().min(0), model_id: modelId, edited_task_prompt: z.string().max(20_000).nullish(), count: z.number().int().min(1).max(5).default(1),
+  // opencode branches only: blind continuation, or continuation with the ledger of what the parent did after the boundary
+  mode: z.enum(["investigate", "recover"]).default("investigate"),
+});
 const NoteBody = z.object({ note: z.string().max(2000).nullish() });
 
 async function checkDailyCap(isPublic: boolean) {
@@ -192,11 +196,19 @@ router.post("/branches/:id/fork", requireKeyOrPublic, wrap(async (req, res) => {
   await checkDailyCap(res.locals.public === true);
   const spent = await services.sessionTokens(parent.sessionId);
   if (spent >= settings.maxTotalTokensPerSession) throw new HttpError(429, `this session has used ${spent} tokens, over its budget of ${settings.maxTotalTokensPerSession}; start a new session`);
-  quota(req, res, body.count);
   let ids: string[];
-  try { ids = await createForks(parent.id, body.step_index, body.model_id, body.edited_task_prompt ?? null, body.count, res.locals.keyId as string); }
-  catch (e) { if (e instanceof RangeError) throw new HttpError(400, e.message); throw e; }
-  for (const id of ids) void scheduler.enqueue(id);
+  if (parent.runner === "opencode") {
+    if (res.locals.public === true) throw new HttpError(401, "forking an opencode branch needs the access key");
+    quota(req, res, 1);
+    const { forkOpencodeBranch } = await import("../lib/opencode/session");
+    try { ids = [await forkOpencodeBranch(parent.id, body.step_index, body.mode, res.locals.keyId as string)]; }
+    catch (e) { if (e instanceof RangeError) throw new HttpError(400, e.message); throw e; }
+  } else {
+    quota(req, res, body.count);
+    try { ids = await createForks(parent.id, body.step_index, body.model_id, body.edited_task_prompt ?? null, body.count, res.locals.keyId as string); }
+    catch (e) { if (e instanceof RangeError) throw new HttpError(400, e.message); throw e; }
+    for (const id of ids) void scheduler.enqueue(id);
+  }
   const rows = (await db.select().from(branches).where(inArray(branches.id, ids))).sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
   const effective = rows[0]?.forkStepIndex ?? body.step_index;
   res.status(201).json({ requested_step_index: body.step_index, fork_step_index: effective, snapped: effective !== body.step_index, branches: rows.map(bview) });
