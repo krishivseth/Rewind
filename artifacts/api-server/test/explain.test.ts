@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 import { branches, db, repos, sessions, steps } from "@workspace/db";
 import { FakeModelClient } from "../src/lib/client";
-import { explainStep, parseExplanation } from "../src/lib/security/explain";
+import { ExplainUnavailable, explainStep, parseExplanation } from "../src/lib/security/explain";
 import { closeDb, resetDb } from "./support";
 
 before(async () => { await resetDb(); });
@@ -76,4 +76,18 @@ test("explainStep stores the explanation once and reuses it", async () => {
   const [row] = await db.select().from(steps).where(eq(steps.branchId, b!.id));
   assert.equal(row!.explanation!.model, "fake-model");
   await assert.rejects(() => explainStep(b!.id, 7, fake), RangeError);
+});
+
+test("an unusable reply is retried once with a bigger budget and never cached", async () => {
+  const [repo] = await db.insert(repos).values({ slug: "y", name: "y", description: "", bundleKey: "k" }).returning();
+  const [sess] = await db.insert(sessions).values({ repoId: repo!.id, title: "t" }).returning();
+  const [b] = await db.insert(branches).values({ sessionId: sess!.id, modelId: "m", taskPrompt: "p" }).returning();
+  await db.insert(steps).values({ branchId: b!.id, stepIndex: 0, kind: "tool_result", content: { role: "tool" }, toolName: "read", toolResult: TEXT });
+  const bad = new FakeModelClient(["", "not json"]);
+  await assert.rejects(() => explainStep(b!.id, 0, bad, "m"), ExplainUnavailable);
+  assert.equal(bad.calls.length, 2);
+  const [row] = await db.select().from(steps).where(eq(steps.branchId, b!.id));
+  assert.equal(row!.explanation, null);
+  const good = new FakeModelClient(["", JSON.stringify({ summary: "second try", segments: [] })]);
+  assert.equal((await explainStep(b!.id, 0, good, "m")).summary, "second try");
 });

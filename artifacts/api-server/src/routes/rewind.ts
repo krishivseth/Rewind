@@ -275,9 +275,13 @@ router.post("/classify", wrap(async (req, res) => {
 // A model-written, display-only reading of a flagged result. Key-gated because it spends tokens.
 router.post("/branches/:id/steps/:index/explain", requireKey, wrap(async (req, res) => {
   const b = await loadBranch(req.params.id as string);
-  const { explainStep } = await import("../lib/security/explain");
+  const { ExplainUnavailable, explainStep } = await import("../lib/security/explain");
   try { res.json(await explainStep(b.id, Number(req.params.index))); }
-  catch (e) { if (e instanceof RangeError) throw new HttpError(400, e.message); throw e; }
+  catch (e) {
+    if (e instanceof RangeError) throw new HttpError(400, e.message);
+    if (e instanceof ExplainUnavailable) throw new HttpError(502, e.message);
+    throw e;
+  }
 }));
 
 // --- classifier benchmark ----------------------------------------------------------------------
