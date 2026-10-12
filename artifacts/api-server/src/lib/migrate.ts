@@ -32,6 +32,7 @@ const statements = [
   `alter table steps add column if not exists oc_message_id text`,
   `alter table steps add column if not exists oc_part_id text`,
   `alter table steps add column if not exists classification jsonb`,
+  `alter table steps add column if not exists explanation jsonb`,
   // old rows had nullable token columns
   `update steps set input_tokens = 0 where input_tokens is null`,
   `update steps set output_tokens = 0 where output_tokens is null`,

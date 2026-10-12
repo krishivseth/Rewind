@@ -1,5 +1,25 @@
-import type { Classification, Runner } from '../api'
+import type { Classification, Explanation, Runner } from '../api'
 import { LEVEL_COLOR, level, reasonLabel } from '../lib/classification'
+
+/** The part-by-part reading under a verdict. Quotes are marked the same way in the result text. */
+export function ExplanationList({ e }: { e: Explanation }) {
+  return (
+    <div className="space-y-2">
+      <p className="text-[12px] text-ink max-w-[70ch]">{e.summary}</p>
+      {e.segments.length > 0 && (
+        <ol className="space-y-1.5">
+          {e.segments.map((s, i) => (
+            <li key={i} className="grid gap-x-3 gap-y-0.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] text-[12px]">
+              <span className="mono break-words" style={{ background: 'var(--color-bad-dim)', color: 'var(--color-bad)', outline: '1px solid var(--color-bad)', padding: '1px 4px' }}>{s.quote}</span>
+              <span className="text-muted">{s.why}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+      <p className="text-[11px] text-faint">Written by {e.model} for the reader. The verdict above did not depend on it, and nothing here reaches a fork.</p>
+    </div>
+  )
+}
 
 const EFFECT_TEXT: Record<Classification['effect'], string> = {
   pure: 'reads only, changes nothing',
@@ -28,7 +48,10 @@ function Meter({ label, value, max, color, note }: { label: string; value: numbe
  * The verdict on a tool result, shown in the step body when there is something to say. Numbers
  * come from the model, reasons from rules and thresholds; the two buttons act on the finding.
  */
-export default function SecurityVerdict({ c, runner, onFork, hideActions = false }: { c: Classification; runner: Runner | undefined; onFork: (mode: 'investigate' | 'recover' | null) => void; hideActions?: boolean }) {
+export default function SecurityVerdict({ c, runner, onFork, hideActions = false, explanation, onExplain, explaining = false }: {
+  c: Classification; runner: Runner | undefined; onFork: (mode: 'investigate' | 'recover' | null) => void; hideActions?: boolean
+  explanation?: Explanation | null; onExplain?: () => void; explaining?: boolean
+}) {
   const l = level(c)
   if (l === 'none') return null
   const color = LEVEL_COLOR[l]
@@ -65,6 +88,17 @@ export default function SecurityVerdict({ c, runner, onFork, hideActions = false
               ? 'No rule matched; the model raised this on its own. The model can raise a flag but never clear one.'
               : l === 'error' ? 'The classifier could not be reached, so only the rules ran on this step.' : 'Below the flag threshold, shown because the effect reaches outside the working tree.'}
       </p>
+      {explanation ? (
+        <div className="border-t pt-3" style={{ borderColor: color }}>
+          <div className="text-[11px] text-muted mb-1.5">Why, part by part</div>
+          <ExplanationList e={explanation} />
+        </div>
+      ) : onExplain && l !== 'error' ? (
+        <div className="flex items-center gap-2">
+          <button type="button" className="btn" disabled={explaining} onClick={onExplain}>{explaining ? 'Reading the result…' : 'Explain why, part by part'}</button>
+          <span className="text-[11px] text-faint">Asks the cheap model to quote the suspicious parts. Display only.</span>
+        </div>
+      ) : null}
       {l !== 'error' && !hideActions && (
         <div className="flex flex-wrap items-center gap-2">
           {oc ? (

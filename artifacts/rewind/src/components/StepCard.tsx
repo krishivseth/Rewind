@@ -8,17 +8,25 @@ import { KIND_COLOR, KIND_LABEL, fmtTokens, parseArgs, shortHash, summarizeCall 
 import Prose from './Prose'
 import SecurityVerdict from './SecurityVerdict'
 
-/** The result text, with the phrase a rule matched marked so the eye lands on it. */
-function ResultText({ text, highlight }: { text: string; highlight: boolean }) {
+/** The result text with the suspicious parts marked: the phrase a rule matched, plus every verbatim quote in the explanation. */
+function ResultText({ text, highlight, quotes }: { text: string; highlight: boolean; quotes: string[] }) {
+  const spans: { start: number; end: number }[] = []
   const hit = highlight ? findInstructionPhrase(text) : null
-  if (!hit) return <>{text}</>
-  return (
-    <>
-      {text.slice(0, hit.start)}
-      <mark style={{ background: 'var(--color-bad-dim)', color: 'var(--color-bad)', outline: '1px solid var(--color-bad)' }}>{text.slice(hit.start, hit.end)}</mark>
-      {text.slice(hit.end)}
-    </>
-  )
+  if (hit) spans.push(hit)
+  for (const q of quotes) { const i = text.indexOf(q); if (i >= 0) spans.push({ start: i, end: i + q.length }) }
+  spans.sort((a, b) => a.start - b.start)
+  const merged: typeof spans = []
+  for (const s of spans) { const last = merged[merged.length - 1]; if (last && s.start <= last.end) last.end = Math.max(last.end, s.end); else merged.push({ ...s }) }
+  if (!merged.length) return <>{text}</>
+  const out: React.ReactNode[] = []
+  let pos = 0
+  merged.forEach((s, i) => {
+    out.push(text.slice(pos, s.start))
+    out.push(<mark key={i} style={{ background: 'var(--color-bad-dim)', color: 'var(--color-bad)', outline: '1px solid var(--color-bad)' }}>{text.slice(s.start, s.end)}</mark>)
+    pos = s.end
+  })
+  out.push(text.slice(pos))
+  return <>{out}</>
 }
 
 function Args({ args }: { args: Record<string, unknown> }) {
@@ -71,6 +79,13 @@ function NoteEditor({ step }: { step: Step }) {
 export default function StepCard({ step, runner, onOpenContext, onFork }: { step: Step; runner?: Runner; onOpenContext: () => void; onFork?: (mode: 'investigate' | 'recover' | null, before: Step) => void }) {
   const color = KIND_COLOR[step.kind]
   const ruleHit = !!step.classification?.reasons.includes('instruction_phrase')
+  const key = useAuth((s) => s.key)
+  const qc = useQueryClient()
+  const explain = useMutation({
+    mutationFn: () => api.explain(step.branch_id, step.index),
+    onSuccess: (e) => qc.setQueryData<Step[]>(['steps', step.branch_id], (old) => old?.map((s) => (s.index === step.index ? { ...s, explanation: e } : s))),
+  })
+  const quotes = step.explanation?.segments.map((s) => s.quote) ?? []
   return (
     <article className="flex min-h-0 flex-1 flex-col">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 sm:px-4 py-2 border-b border-line text-[11px] text-muted">
@@ -129,11 +144,13 @@ export default function StepCard({ step, runner, onOpenContext, onFork }: { step
         {step.kind === 'tool_result' && (
           <div className="space-y-3">
             {step.classification && onFork && (
-              <SecurityVerdict c={step.classification} runner={runner} onFork={(mode) => onFork(mode, step)} />
+              <SecurityVerdict c={step.classification} runner={runner} onFork={(mode) => onFork(mode, step)}
+                explanation={step.explanation} onExplain={key ? () => explain.mutate() : undefined} explaining={explain.isPending} />
             )}
+            {explain.error && <p className="text-[12px] text-bad">{(explain.error as Error).message}</p>}
             <div className="mono text-[12px] text-muted">{summarizeCall(step.tool_name ?? '', step.tool_args)}</div>
             <pre className="mono text-[12px] leading-[1.5] whitespace-pre-wrap break-words rounded border border-line bg-bg p-3 max-h-full">
-              <ResultText text={step.tool_result ?? ''} highlight={ruleHit} />
+              <ResultText text={step.tool_result ?? ''} highlight={ruleHit} quotes={quotes} />
             </pre>
           </div>
         )}

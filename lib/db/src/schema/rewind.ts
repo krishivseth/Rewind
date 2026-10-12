@@ -14,6 +14,14 @@ export interface Classification {
   source?: "posthoc" | "inline";
 }
 
+/** Why a flagged tool result was flagged, part by part. Quotes are verbatim substrings of the result. */
+export interface Explanation {
+  model: string;
+  summary: string;
+  segments: { quote: string; why: string }[];
+  created_at: string;
+}
+
 export const repos = pgTable("repos", {
   id: uuid("id").defaultRandom().primaryKey(),
   slug: text("slug").notNull().unique(),
@@ -80,6 +88,8 @@ export const steps = pgTable("steps", {
   ocMessageId: text("oc_message_id"),
   ocPartId: text("oc_part_id"),
   classification: jsonb("classification").$type<Classification | null>(),
+  // a model-written, display-only reading of a flagged result: verbatim quotes plus why each is suspicious
+  explanation: jsonb("explanation").$type<Explanation | null>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [uniqueIndex("steps_branch_index_uq").on(table.branchId, table.stepIndex)]);
 

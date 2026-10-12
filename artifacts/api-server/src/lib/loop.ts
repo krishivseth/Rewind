@@ -40,6 +40,7 @@ export function stepView(s: Step): Record<string, unknown> {
     tool_args: s.toolArgs, tool_result: s.toolResult, commit_hash: s.commitHash, files_changed: s.filesChanged ?? [],
     input_tokens: s.inputTokens, output_tokens: s.outputTokens, latency_ms: s.latencyMs, note: s.note,
     oc_message_id: s.ocMessageId ?? null, oc_part_id: s.ocPartId ?? null, classification: s.classification ?? null,
+    explanation: s.explanation ?? null,
     created_at: s.createdAt.toISOString(),
   };
 }

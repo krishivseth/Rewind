@@ -89,16 +89,28 @@ router.get("/sessions/:id", wrap(async (req, res) => { res.json(await sessionVie
 router.get("/branches/:id", wrap(async (req, res) => { res.json(bview(await loadBranch(req.params.id as string))); }));
 router.get("/branches/:id/steps", wrap(async (req, res) => { const b = await loadBranch(req.params.id as string); res.json((await services.branchSteps(b.id)).map(stepView)); }));
 
+/** A recording whose bundle is gone (DATA_DIR wiped, volume lost) is a 409 the UI can explain, not a 500. */
+async function withBundle<T>(fn: () => Promise<T>): Promise<T> {
+  try { return await fn(); }
+  catch (e) {
+    const code = (e as { code?: string }).code;
+    if (code === "ENOENT" || /no bundle and no live worktree/.test((e as Error).message ?? "")) {
+      throw new HttpError(409, "This recording's files are no longer on this server (its bundle is missing from DATA_DIR). Steps and verdicts are still here; file views are not.");
+    }
+    throw e;
+  }
+}
+
 router.get("/branches/:id/steps/:index/files", wrap(async (req, res) => {
   const { b, rows } = await branchAndSteps(req.params.id as string, Number(req.params.index));
-  res.json(await services.filesAtStep(b, rows, Number(req.params.index)));
+  res.json(await withBundle(() => services.filesAtStep(b, rows, Number(req.params.index))));
 }));
 
 router.get("/branches/:id/steps/:index/file", wrap(async (req, res) => {
   const p = String(req.query.path ?? "");
   if (!p || p.startsWith("/") || p.split("/").includes("..")) throw new HttpError(400, "bad path");
   const { b, rows } = await branchAndSteps(req.params.id as string, Number(req.params.index));
-  res.json(await services.fileAtStep(b, rows, Number(req.params.index), p, req.query.with_previous === "true"));
+  res.json(await withBundle(() => services.fileAtStep(b, rows, Number(req.params.index), p, req.query.with_previous === "true")));
 }));
 
 router.get("/branches/:id/steps/:index/context", wrap(async (req, res) => {
@@ -258,6 +270,14 @@ router.post("/classify", wrap(async (req, res) => {
   const rules = ruleReasons(body.tool, body.args, body.result ?? null, body.project_dir ?? null);
   const d = await getClassifier().decide(renderState(body.tool, body.args, body.result ?? null, settings.classifyMaxChars));
   res.json({ ...verdict(rules, d), source: "inline" });
+}));
+
+// A model-written, display-only reading of a flagged result. Key-gated because it spends tokens.
+router.post("/branches/:id/steps/:index/explain", requireKey, wrap(async (req, res) => {
+  const b = await loadBranch(req.params.id as string);
+  const { explainStep } = await import("../lib/security/explain");
+  try { res.json(await explainStep(b.id, Number(req.params.index))); }
+  catch (e) { if (e instanceof RangeError) throw new HttpError(400, e.message); throw e; }
 }));
 
 // --- classifier benchmark ----------------------------------------------------------------------

@@ -58,7 +58,10 @@ export interface Step {
   oc_message_id?: string | null
   oc_part_id?: string | null
   classification?: Classification | null
+  explanation?: Explanation | null
 }
+/** Model-written, display-only reading of a flagged result; quotes are verbatim substrings of the result. */
+export interface Explanation { model: string; summary: string; segments: { quote: string; why: string }[]; created_at: string }
 
 export interface SearchHit {
   session_id: string; session_title: string; repo_slug: string; branch_id: string; model_id: string
@@ -146,6 +149,7 @@ export const api = {
   search: (q: string) => request<{ q: string; results: SearchHit[] }>(`/api/search?q=${encodeURIComponent(q)}`),
   stats: () => request<Stats>('/api/stats'),
   logout: () => request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
+  explain: (branchId: string, index: number) => request<Explanation>(`/api/branches/${branchId}/steps/${index}/explain`, { method: 'POST' }, true),
   bench: () => request<BenchData>('/api/bench'),
   benchTry: (tool: string, text: string) => request<BenchTry>('/api/bench/classify', { method: 'POST', body: JSON.stringify({ tool, text }) }, true),
 }
