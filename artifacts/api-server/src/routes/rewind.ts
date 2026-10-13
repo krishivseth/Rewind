@@ -74,13 +74,19 @@ router.get("/models", (_req, res) => { res.json(MODELS.map((m) => ({ id: m.id, n
 router.get("/sessions", wrap(async (_req, res) => {
   const rows = await db.select({ session: sessions, repo: repos }).from(sessions).innerJoin(repos, eq(sessions.repoId, repos.id)).orderBy(desc(sessions.createdAt));
   const all = rows.length ? await db.select().from(branches).where(inArray(branches.sessionId, rows.map((r) => r.session.id))).orderBy(asc(branches.createdAt)) : [];
+  const flags = all.length
+    ? await db.select({ branchId: steps.branchId, n: sql<number>`count(*)::int` }).from(steps)
+      .where(and(inArray(steps.branchId, all.map((b) => b.id)), sql`(${steps.classification}->>'flag')::boolean`)).groupBy(steps.branchId)
+    : [];
+  const flagCount = new Map(flags.map((f) => [f.branchId, f.n]));
   res.json(rows.map(({ session, repo }) => {
     const mine = all.filter((b) => b.sessionId === session.id);
     const root = mine.find((b) => b.id === session.rootBranchId);
     return {
       id: session.id, title: session.title, repo_slug: repo.slug, repo_id: repo.id, root_branch_id: session.rootBranchId,
       model_id: root?.modelId ?? null, branch_count: mine.length, created_at: session.createdAt.toISOString(),
-      branches: mine.map((b) => ({ id: b.id, parent_branch_id: b.parentBranchId, fork_step_index: b.forkStepIndex, status: b.status, step_count: b.stepCount })),
+      runner: root?.runner ?? "rewind", flag_count: mine.reduce((n, b) => n + (flagCount.get(b.id) ?? 0), 0),
+      branches: mine.map((b) => ({ id: b.id, parent_branch_id: b.parentBranchId, fork_step_index: b.forkStepIndex, status: b.status, step_count: b.stepCount, flag_count: flagCount.get(b.id) ?? 0 })),
     };
   }));
 }));

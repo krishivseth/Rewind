@@ -72,7 +72,8 @@ export interface Stats { tokens_used_today: number; daily_token_cap: number; bra
 export interface SessionSummary {
   id: string; title: string; repo_slug: string; repo_id: string; root_branch_id: string | null
   model_id: string | null; branch_count: number; created_at: string
-  branches: { id: string; parent_branch_id: string | null; fork_step_index: number | null; status: BranchStatus; step_count: number }[]
+  runner?: Runner; flag_count?: number
+  branches: { id: string; parent_branch_id: string | null; fork_step_index: number | null; status: BranchStatus; step_count: number; flag_count?: number }[]
 }
 export interface SessionDetail {
   id: string; title: string; repo_slug: string; repo_id: string; root_branch_id: string | null; created_at: string

@@ -24,8 +24,10 @@ export default function Home() {
   const publicMode = !key && (stats.data?.public_writes === 'cheap' || (stats.data?.public_writes === 'signed_in' && !!stats.data?.me))
   const signedInMode = stats.data?.public_writes === 'signed_in'
   const readOnly = stats.data?.read_only === true
-  // the session with the most branches is the best first thing to open
-  const featured = q.data && q.data.length ? [...q.data].sort((a, b) => b.branch_count - a.branch_count)[0] : undefined
+  // the best first thing to open: a run with a flagged step, else the one with the most branches
+  const featured = q.data && q.data.length
+    ? [...q.data].sort((a, b) => (b.flag_count ?? 0) - (a.flag_count ?? 0) || b.branch_count - a.branch_count)[0]
+    : undefined
   return (
     <div className="flex h-full flex-col">
       <TopBar>
@@ -46,10 +48,10 @@ export default function Home() {
       <div className="min-h-0 flex-1 overflow-auto">
         <div className="mx-auto max-w-[820px] p-3 sm:p-4 space-y-3">
           <section className="border border-line bg-panel px-5 py-4 space-y-2">
-            <p className="text-[15px] text-ink">Rewind records a coding agent step by step, so you can scrub back to any moment, see exactly what the model saw, and {readOnly ? 'compare the branches that forked from there' : 'fork from there'}.</p>
+            <p className="text-[15px] text-ink">Rewind records a coding agent step by step, flags the tool results that carry prompt injections or dangerous side effects, and lets you {readOnly ? 'see how the branches that forked from before a flag turned out' : 'fork from before the flag to prove what it caused, or to recover'}.</p>
             <p className="text-[13px] text-muted">
-              Open a session, drag the scrubber, press <kbd>C</kbd> for the model's context{readOnly ? '.' : <>, then <kbd>F</kbd> to fork it with another model or prompt and watch both runs side by side.</>}
-              {' '}Under a branch with forks, "compare" lines them up and marks where they diverged; shift-click two branches to diff their code.
+              Open a session: the strip under the scrubber says whether anything was flagged, and each flagged step carries its verdict, a part-by-part reading, and {readOnly ? 'the forks taken from before it' : <>two fork buttons. <kbd>C</kbd> shows exactly what the model saw at any step; <kbd>F</kbd> forks it with another model or prompt.</>}
+              {' '}"compare" under a branch with forks marks where they diverged; shift-click two branches to diff their code. The Benchmark tab shows how the classifier scores on public injection corpora.
               {readOnly && ' The runs below were recorded with cheap models and cannot be changed.'}
             </p>
             {readOnly && (
@@ -113,10 +115,16 @@ export default function Home() {
                   <Link to={`/sessions/${s.id}`} className="min-w-0 flex-1 grid grid-cols-1 sm:grid-cols-[1fr_auto] items-center gap-3 sm:gap-6 px-4 py-3">
                     <div className="min-w-0 space-y-1">
                       <div className="text-[14px] text-ink truncate" title={s.title}>{s.title}</div>
-                      <div className="mono text-[11px] text-muted flex gap-4">
+                      <div className="mono text-[11px] text-muted flex flex-wrap gap-x-4 gap-y-1 [&>span]:whitespace-nowrap">
                         <span>{s.repo_slug}</span>
                         <span>{s.model_id ? shortModel(s.model_id) : ''}</span>
                         <span className="text-faint">{s.branch_count} branch{s.branch_count === 1 ? '' : 'es'}</span>
+                        {s.runner === 'opencode' && <span className="text-faint" title="recorded from an OpenCode session">opencode</span>}
+                        {(s.flag_count ?? 0) > 0 && (
+                          <span className="px-1 text-[10px]" style={{ background: 'var(--color-bad)', color: 'var(--color-bg)' }} title="flagged tool results across the session's branches">
+                            {s.flag_count} {s.flag_count === 1 ? 'flag' : 'flags'}
+                          </span>
+                        )}
                         {live > 0 && <span className="text-accent">{live} running</span>}
                         <span className="text-faint">{new Date(s.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
                       </div>
