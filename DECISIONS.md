@@ -4,8 +4,8 @@ Choices the spec left open, and what this codebase does about them.
 
 ## Architecture
 
-1. **TypeScript, Express, Drizzle.** The spec asked for Python and FastAPI; this repo is the Replit
-   submission and keeps the Replit monorepo layout (`artifacts/api-server`, `artifacts/rewind`,
+1. **TypeScript, Express, Drizzle.** The spec asked for Python and FastAPI; this repo began as a Replit
+   submission and keeps that monorepo layout (`artifacts/api-server`, `artifacts/rewind`,
    `lib/db`). The one-process rule is honoured where it matters: the API server hosts the routes, the
    SSE streams and the agent workers. On Replit the frontend is a separate static artifact routed on
    `/`; off Replit the API server serves the built frontend itself.

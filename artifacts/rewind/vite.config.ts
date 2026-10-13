@@ -3,9 +3,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vitest/config';
 
-import runtimeErrorOverlay from '@replit/vite-plugin-runtime-error-modal';
-
-// Replit sets PORT and BASE_PATH per artifact; locally we default them and proxy /api to the API server.
+// PORT and BASE_PATH default for local use; /api is proxied to the API server in dev.
 const port = Number(process.env.PORT ?? 5173);
 if (Number.isNaN(port) || port <= 0) throw new Error(`Invalid PORT value: "${process.env.PORT}"`);
 const basePath = process.env.BASE_PATH ?? '/';
@@ -16,20 +14,6 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss({ optimize: false }),
-    runtimeErrorOverlay(),
-    ...(process.env.NODE_ENV !== 'production' &&
-    process.env.REPL_ID !== undefined
-      ? [
-          await import('@replit/vite-plugin-cartographer').then((m) =>
-            m.cartographer({
-              root: path.resolve(import.meta.dirname, '..'),
-            }),
-          ),
-          await import('@replit/vite-plugin-dev-banner').then((m) =>
-            m.devBanner(),
-          ),
-        ]
-      : []),
   ],
   resolve: {
     alias: {

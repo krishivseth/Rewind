@@ -53,3 +53,7 @@ data/
 .env
 artifacts/api-server/test/.generated/
 attached_assets/
+data
+.rewind/
+*.log
+projects/

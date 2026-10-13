@@ -9,7 +9,6 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc tsconfig.base.json t
 COPY lib ./lib
 COPY artifacts/api-server/package.json artifacts/api-server/
 COPY artifacts/rewind/package.json artifacts/rewind/
-COPY artifacts/mockup-sandbox/package.json artifacts/mockup-sandbox/
 COPY scripts ./scripts
 RUN pnpm install --frozen-lockfile
 COPY artifacts ./artifacts

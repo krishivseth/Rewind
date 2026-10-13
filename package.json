@@ -11,12 +11,10 @@
     "dev": "node scripts/dev.mjs",
     "start": "node --enable-source-maps artifacts/api-server/dist/index.mjs",
     "db:push": "pnpm --filter @workspace/db run push",
-    "seed": "node --enable-source-maps artifacts/api-server/dist/seed_sessions.mjs"
+    "seed": "node --enable-source-maps artifacts/api-server/dist/seed_sessions.mjs",
+    "demo:stage": "sh scripts/stage-demo.sh"
   },
   "private": true,
-  "dependencies": {
-    "@replit/connectors-sdk": "^0.4.1"
-  },
   "devDependencies": {
     "prettier": "^3.9.6",
     "typescript": "~5.9.3"
