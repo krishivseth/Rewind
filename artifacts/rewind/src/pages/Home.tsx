@@ -109,8 +109,8 @@ export default function Home() {
             {q.data?.map((s) => {
               const live = s.branches.filter((b) => isLive(b.status)).length
               return (
-                <li key={s.id} className="relative">
-                  <Link to={`/sessions/${s.id}`} className="grid grid-cols-1 sm:grid-cols-[1fr_auto] items-center gap-3 sm:gap-6 border border-line rounded bg-panel px-4 py-3 hover:border-muted">
+                <li key={s.id} className="flex items-stretch border border-line rounded bg-panel hover:border-muted">
+                  <Link to={`/sessions/${s.id}`} className="min-w-0 flex-1 grid grid-cols-1 sm:grid-cols-[1fr_auto] items-center gap-3 sm:gap-6 px-4 py-3">
                     <div className="min-w-0 space-y-1">
                       <div className="text-[14px] text-ink truncate" title={s.title}>{s.title}</div>
                       <div className="mono text-[11px] text-muted flex gap-4">
@@ -124,10 +124,12 @@ export default function Home() {
                     <div className="hidden sm:block"><TreeSketch branches={s.branches} width={240} /></div>
                     <div className="sm:hidden"><TreeSketch branches={s.branches} width={200} /></div>
                   </Link>
-                  {/* sibling of the link, not a child: buttons inside anchors are invalid and click-through prone */}
-                  <div className="absolute right-4 bottom-3 flex items-center">
-                    {!readOnly && <DeleteSession sessionId={s.id} branchCount={s.branch_count} compact onDone={() => void q.refetch()} />}
-                  </div>
+                  {/* its own column beside the link, never over the sketch: buttons inside anchors are invalid and click-through prone */}
+                  {!readOnly && key && (
+                    <div className="flex items-center px-3 border-l border-line shrink-0">
+                      <DeleteSession sessionId={s.id} branchCount={s.branch_count} compact onDone={() => void q.refetch()} />
+                    </div>
+                  )}
                 </li>
               )
             })}
