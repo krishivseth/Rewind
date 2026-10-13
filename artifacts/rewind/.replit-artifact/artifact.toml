@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Rewind"
+description = "A time-travel debugger for coding-agent sessions. Inspect exact repository states and model context, fork branches from any step, and compare divergent runs."
+version = "1.0.0"
+id = "artifacts/rewind"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18816
+
+[services.development]
+run = "pnpm --filter @workspace/rewind run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/rewind", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/rewind/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18816"
+BASE_PATH = "/"

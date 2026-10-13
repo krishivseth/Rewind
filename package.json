@@ -1,0 +1,24 @@
+{
+  "name": "workspace",
+  "version": "0.0.0",
+  "license": "MIT",
+  "scripts": {
+    "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
+    "build": "pnpm run typecheck && pnpm --filter @workspace/api-server run build && pnpm --filter @workspace/rewind run build",
+    "typecheck:libs": "tsc --build",
+    "typecheck": "pnpm run typecheck:libs && pnpm --filter @workspace/api-server --filter @workspace/rewind run typecheck",
+    "test": "pnpm -r --if-present run test",
+    "dev": "node scripts/dev.mjs",
+    "start": "node --enable-source-maps artifacts/api-server/dist/index.mjs",
+    "db:push": "pnpm --filter @workspace/db run push",
+    "seed": "node --enable-source-maps artifacts/api-server/dist/seed_sessions.mjs"
+  },
+  "private": true,
+  "dependencies": {
+    "@replit/connectors-sdk": "^0.4.1"
+  },
+  "devDependencies": {
+    "prettier": "^3.9.6",
+    "typescript": "~5.9.3"
+  }
+}
