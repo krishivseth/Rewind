@@ -2,7 +2,7 @@
 import "./setup";
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -67,6 +67,17 @@ test("API rejects a project_path outside the projects root, and public callers",
   assert.match((await r1.json()).detail, /project_path/);
   const r2 = await post(body, {});
   assert.equal(r2.status, 401);
+});
+
+test("a symlink inside the projects root cannot point the agent outside it", async () => {
+  const outside = mkdtempSync(path.join(os.tmpdir(), "rewind-outside-"));
+  symlinkSync(outside, path.join(settings.opencodeProjectsRoot, "escape"));
+  const [repo] = await db.insert(repos).values({ slug: "oc3", name: "oc3", description: "", bundleKey: "k" }).returning();
+  const r = await fetch(`${base}/api/sessions`, { method: "POST", headers: { "Content-Type": "application/json", "X-Rewind-Key": "test-key" }, body: JSON.stringify({
+    repo_id: repo!.id, title: "t", task_prompt: "p", model_id: "deepseek/deepseek-v4-flash", runner: "opencode", project_path: "escape",
+  }) });
+  assert.equal(r.status, 400);
+  assert.match((await r.json()).detail, /inside/);
 });
 
 test("default runner is unchanged", async () => {

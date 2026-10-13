@@ -1,5 +1,5 @@
 /** All /api routes. Response shapes use snake_case, matching the frontend types. */
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { Router, type IRouter, type Request, type Response } from "express";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
@@ -169,12 +169,15 @@ const CreateSession = z.object({
 /** The opencode runner names a directory on this machine: key holders only, and only under the projects root. */
 function resolveProjectDir(raw: string | undefined): string {
   if (!raw) throw new HttpError(400, "project_path is required for the opencode runner");
-  const root = path.resolve(settings.opencodeProjectsRoot);
-  const dir = path.resolve(root, raw);
-  const rel = path.relative(root, dir);
-  if (rel.startsWith("..") || path.isAbsolute(rel)) throw new HttpError(400, `project_path must be inside ${root}`);
+  const rootGiven = path.resolve(settings.opencodeProjectsRoot);
+  if (!existsSync(rootGiven)) throw new HttpError(400, `OPENCODE_PROJECTS_ROOT does not exist on this server (${rootGiven})`);
+  const dir = path.resolve(rootGiven, raw);
   if (!existsSync(dir) || !statSync(dir).isDirectory()) throw new HttpError(400, "project_path must be an existing directory");
-  return dir;
+  // compare real paths, so a symlink inside the root cannot point the agent at a directory outside it
+  const root = realpathSync.native(rootGiven), real = realpathSync.native(dir);
+  const rel = path.relative(root, real);
+  if (rel.startsWith("..") || path.isAbsolute(rel)) throw new HttpError(400, `project_path must be inside ${rootGiven}`);
+  return real;
 }
 const ForkBody = z.object({
   step_index: z.number().int().min(0), model_id: modelId, edited_task_prompt: z.string().max(20_000).nullish(), count: z.number().int().min(1).max(5).default(1),
@@ -258,13 +261,13 @@ router.put("/branches/:id/steps/:index/note", requireKey, wrap(async (req, res) 
 }));
 
 // Inline guard for the OpenCode plugin (.opencode/plugins/rewind.ts): rules plus the model on one
-// call or result, before it runs or before the model sees it. Read-only, localhost, and absent
-// (404) unless REWIND_INLINE_GUARD is on, so the surface does not exist when unused.
+// call or result, before it runs or before the model sees it. Key-gated (it spends tokens and
+// reads tool output) and absent (404) unless REWIND_INLINE_GUARD is on.
 const ClassifyBody = z.object({
   tool: z.string().max(128), args: z.record(z.unknown()).default({}),
   result: z.string().max(200_000).nullish(), project_dir: z.string().nullish(),
 });
-router.post("/classify", wrap(async (req, res) => {
+router.post("/classify", requireKey, wrap(async (req, res) => {
   if (!settings.inlineGuard) throw new HttpError(404, "not found");
   const body = ClassifyBody.parse(req.body);
   const rules = ruleReasons(body.tool, body.args, body.result ?? null, body.project_dir ?? null);

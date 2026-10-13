@@ -15,11 +15,17 @@ before(async () => {
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
 after(async () => { server.close(); await closeDb(); });
-const post = (body: unknown) => fetch(`${base}/api/classify`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+const post = (body: unknown, key = "test-key") => fetch(`${base}/api/classify`, { method: "POST", headers: { "Content-Type": "application/json", "X-Rewind-Key": key }, body: JSON.stringify(body) });
 
 test("endpoint is off by default", async () => {
   settings.inlineGuard = false;
   assert.equal((await post({ tool: "bash", args: { command: "ls" }, result: null, project_dir: null })).status, 404);
+});
+
+test("endpoint needs the access key even when on", async () => {
+  settings.inlineGuard = true;
+  try { assert.equal((await post({ tool: "bash", args: { command: "ls" } }, "wrong")).status, 401); }
+  finally { settings.inlineGuard = false; }
 });
 
 test("endpoint returns an inline verdict", async () => {

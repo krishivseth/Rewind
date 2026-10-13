@@ -2,7 +2,7 @@
 import "./setup";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { OpenCodeClient, writeOpencodeConfig } from "../src/lib/opencode/client";
@@ -65,4 +65,31 @@ test("opencode.json is written", async () => {
   assert.equal(cfg.snapshot, false);
   assert.deepEqual(cfg.compaction, { auto: false });
   assert.deepEqual(cfg.permission, { edit: "allow", bash: "allow", webfetch: "deny" });
+});
+
+test("an existing opencode.json keeps its own keys; ours win where they overlap", async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "rewind-occfg-"));
+  writeFileSync(path.join(dir, "opencode.json"), JSON.stringify({ theme: "dark", mcp: { fs: { command: "x" } }, snapshot: true, permission: { bash: "ask", webfetch: "allow", other: "ask" } }));
+  await writeOpencodeConfig(dir, "m");
+  const cfg = JSON.parse(readFileSync(path.join(dir, "opencode.json"), "utf8"));
+  assert.equal(cfg.theme, "dark");
+  assert.deepEqual(cfg.mcp, { fs: { command: "x" } });
+  assert.equal(cfg.snapshot, false);
+  assert.deepEqual(cfg.permission, { other: "ask", edit: "allow", bash: "allow", webfetch: "deny" });
+});
+
+test("every request carries the server password as basic auth", async () => {
+  const seen: string[] = [];
+  const c = new OpenCodeClient("http://oc", async (url, init) => {
+    seen.push(`${new URL(String(url)).pathname} ${new Headers(init?.headers).get("authorization") ?? "-"}`);
+    const p = new URL(String(url)).pathname;
+    if (p === "/session") return json({ id: "s" });
+    if (p === "/event") return new Response("", { status: 200 });
+    if (p.endsWith("/message")) return json([]);
+    return json({ healthy: true, version: "x" });
+  }, "pw");
+  await c.health(); await c.createSession("t"); await c.messages("s");
+  for await (const _ of c.events()) { /* drain */ }
+  const expected = `Basic ${Buffer.from("opencode:pw").toString("base64")}`;
+  assert.deepEqual(seen, [`/global/health ${expected}`, `/session ${expected}`, `/session/s/message ${expected}`, `/event ${expected}`]);
 });

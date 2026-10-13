@@ -1,6 +1,7 @@
 /** HTTP client for `opencode serve` and a manager that runs one server per project directory. */
 import { spawn, type ChildProcess } from "node:child_process";
-import { writeFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { settings } from "../config";
 import { logger } from "../logger";
@@ -9,10 +10,14 @@ import type { OcEvent } from "./translate";
 export class OpenCodeError extends Error {}
 
 export class OpenCodeClient {
-  constructor(readonly baseUrl: string, private fetchImpl: typeof fetch = fetch) {}
+  private auth: Record<string, string>;
+  /** `password` is the server's OPENCODE_SERVER_PASSWORD (HTTP basic auth, user "opencode"); absent only in tests. */
+  constructor(readonly baseUrl: string, private fetchImpl: typeof fetch = fetch, password?: string) {
+    this.auth = password ? { authorization: `Basic ${Buffer.from(`opencode:${password}`).toString("base64")}` } : {};
+  }
 
   private async post<T>(p: string, body?: unknown): Promise<T | null> {
-    const r = await this.fetchImpl(`${this.baseUrl}${p}`, { method: "POST", headers: { "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+    const r = await this.fetchImpl(`${this.baseUrl}${p}`, { method: "POST", headers: { "content-type": "application/json", ...this.auth }, body: body === undefined ? undefined : JSON.stringify(body) });
     if (r.status >= 400) throw new OpenCodeError(`${p} -> ${r.status}: ${(await r.text()).slice(0, 300)}`);
     if (r.status === 204) return null;
     const text = await r.text();
@@ -20,7 +25,7 @@ export class OpenCodeClient {
   }
 
   async health(): Promise<{ healthy: boolean; version: string }> {
-    const r = await this.fetchImpl(`${this.baseUrl}/global/health`);
+    const r = await this.fetchImpl(`${this.baseUrl}/global/health`, { headers: this.auth });
     if (!r.ok) throw new OpenCodeError(`health ${r.status}`);
     return (await r.json()) as { healthy: boolean; version: string };
   }
@@ -29,7 +34,7 @@ export class OpenCodeClient {
     await this.post(`/session/${sessionId}/prompt_async`, { parts: text === null ? [] : [{ type: "text", text }] });
   }
   async messages(sessionId: string): Promise<unknown[]> {
-    const r = await this.fetchImpl(`${this.baseUrl}/session/${sessionId}/message`);
+    const r = await this.fetchImpl(`${this.baseUrl}/session/${sessionId}/message`, { headers: this.auth });
     if (!r.ok) throw new OpenCodeError(`messages ${r.status}`);
     return (await r.json()) as unknown[];
   }
@@ -39,7 +44,7 @@ export class OpenCodeClient {
   }
 
   async *events(signal?: AbortSignal): AsyncGenerator<OcEvent> {
-    const r = await this.fetchImpl(`${this.baseUrl}/event`, { signal });
+    const r = await this.fetchImpl(`${this.baseUrl}/event`, { signal, headers: this.auth });
     if (!r.ok || !r.body) throw new OpenCodeError(`event stream ${r.status}`);
     const reader = r.body.pipeThrough(new TextDecoderStream()).getReader();
     let buf = "";
@@ -58,16 +63,23 @@ export class OpenCodeClient {
   }
 }
 
-/** Project-level opencode.json: our model, no OpenCode snapshots or compaction, no prompts. */
+/**
+ * Project-level opencode.json: our model, no OpenCode snapshots or compaction, no permission
+ * prompts. Merged over whatever the project already has, so a user's own config survives.
+ */
 export async function writeOpencodeConfig(projectDir: string, modelId: string): Promise<void> {
+  const file = path.join(projectDir, "opencode.json");
+  let existing: Record<string, unknown> = {};
+  try { existing = JSON.parse(await readFile(file, "utf8")) as Record<string, unknown>; } catch { /* absent or unreadable: start fresh */ }
   const cfg = {
     $schema: "https://opencode.ai/config.json",
+    ...existing,
     model: `openrouter/${modelId}`,
     snapshot: false,
-    compaction: { auto: false },
-    permission: { edit: "allow", bash: "allow", webfetch: "deny" },
+    compaction: { ...(typeof existing.compaction === "object" && existing.compaction ? existing.compaction : {}), auto: false },
+    permission: { ...(typeof existing.permission === "object" && existing.permission ? existing.permission : {}), edit: "allow", bash: "allow", webfetch: "deny" },
   };
-  await writeFile(path.join(projectDir, "opencode.json"), `${JSON.stringify(cfg, null, 2)}\n`);
+  await writeFile(file, `${JSON.stringify(cfg, null, 2)}\n`);
 }
 
 export class ServerManager {
@@ -79,8 +91,22 @@ export class ServerManager {
     const live = this.servers.get(key);
     if (live && live.proc.exitCode === null) return live.client;
     const port = this.portBase + this.servers.size;
-    const proc = spawn(this.bin, ["serve", "--port", String(port), "--hostname", "127.0.0.1"], { cwd: key, stdio: "ignore", env: process.env });
-    const client = new OpenCodeClient(`http://127.0.0.1:${port}`);
+    // The agent behind this server runs shell commands in the project, so it gets a minimal
+    // environment: no Rewind access key, database URL or GitHub secrets. OpenCode needs the
+    // OpenRouter key for its provider, HOME for its own config and data, and PATH for tools.
+    // A per-server password keeps other local processes from driving the session API.
+    const password = randomBytes(24).toString("base64url");
+    const env: Record<string, string> = {
+      PATH: process.env.PATH ?? "/usr/bin:/bin",
+      HOME: process.env.HOME ?? "/tmp",
+      OPENROUTER_API_KEY: settings.openrouterApiKey,
+      OPENCODE_SERVER_PASSWORD: password,
+      LANG: process.env.LANG ?? "C.UTF-8",
+    };
+    if (process.env.XDG_DATA_HOME) env.XDG_DATA_HOME = process.env.XDG_DATA_HOME;
+    if (process.env.XDG_CONFIG_HOME) env.XDG_CONFIG_HOME = process.env.XDG_CONFIG_HOME;
+    const proc = spawn(this.bin, ["serve", "--port", String(port), "--hostname", "127.0.0.1"], { cwd: key, stdio: "ignore", env });
+    const client = new OpenCodeClient(`http://127.0.0.1:${port}`, fetch, password);
     for (let i = 0; i < 60; i += 1) {
       try {
         await client.health();
