@@ -16,8 +16,12 @@ export default function DeleteSession({ sessionId, branchCount, compact = false,
   })
   if (!key) return null
   if (!arming) return <button className={`btn ${compact ? 'text-[11px] py-0.5' : ''}`} onClick={(e) => { e.preventDefault(); e.stopPropagation(); setArming(true) }}>Delete</button>
+  // compact (session cards): the confirmation floats over the card from the right, so the card keeps its layout
+  const armedClass = compact
+    ? 'absolute right-2 top-1/2 -translate-y-1/2 z-10 flex items-center gap-2 whitespace-nowrap border border-line bg-panel px-3 py-2 shadow-lg text-[12px]'
+    : 'flex items-center gap-2 text-[12px]'
   return (
-    <span className="flex items-center gap-2 text-[12px]" onClick={(e) => { e.preventDefault(); e.stopPropagation() }}>
+    <span className={armedClass} onClick={(e) => { e.preventDefault(); e.stopPropagation() }}>
       <span className="text-muted">Delete this session and its {branchCount} branch{branchCount === 1 ? '' : 'es'}? Bundles go too.</span>
       <button className="btn" style={{ borderColor: 'var(--color-bad)', color: 'var(--color-bad)' }} disabled={del.isPending} onClick={() => del.mutate()}>{del.isPending ? 'Deleting…' : 'Delete'}</button>
       <button className="btn" onClick={() => setArming(false)}>Keep</button>
