@@ -2,6 +2,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
+import { createServer } from "node:net";
 import path from "node:path";
 import { settings } from "../config";
 import { logger } from "../logger";
@@ -82,6 +83,19 @@ export async function writeOpencodeConfig(projectDir: string, modelId: string): 
   await writeFile(file, `${JSON.stringify(cfg, null, 2)}\n`);
 }
 
+/** First port at or above `start` that nothing is listening on (a stale opencode serve, another app). */
+export async function freePort(start: number, tries = 50): Promise<number> {
+  for (let port = start; port < start + tries; port += 1) {
+    const ok = await new Promise<boolean>((resolve) => {
+      const srv = createServer();
+      srv.once("error", () => resolve(false));
+      srv.listen(port, "127.0.0.1", () => srv.close(() => resolve(true)));
+    });
+    if (ok) return port;
+  }
+  throw new OpenCodeError(`no free port in ${start}..${start + tries - 1}`);
+}
+
 export class ServerManager {
   private servers = new Map<string, { proc: ChildProcess; client: OpenCodeClient }>();
   constructor(private bin: string, private portBase: number) {}
@@ -90,7 +104,7 @@ export class ServerManager {
     const key = path.resolve(projectDir);
     const live = this.servers.get(key);
     if (live && live.proc.exitCode === null) return live.client;
-    const port = this.portBase + this.servers.size;
+    const port = await freePort(this.portBase);
     // The agent behind this server runs shell commands in the project, so it gets a minimal
     // environment: no Rewind access key, database URL or GitHub secrets. OpenCode needs the
     // OpenRouter key for its provider, HOME for its own config and data, and PATH for tools.

@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { OpenCodeClient, writeOpencodeConfig } from "../src/lib/opencode/client";
+import { OpenCodeClient, freePort, writeOpencodeConfig } from "../src/lib/opencode/client";
 
 type Call = [string, string, unknown];
 function fakeFetch(log: Call[], reply: (p: string) => Response): typeof fetch {
@@ -76,6 +76,18 @@ test("an existing opencode.json keeps its own keys; ours win where they overlap"
   assert.deepEqual(cfg.mcp, { fs: { command: "x" } });
   assert.equal(cfg.snapshot, false);
   assert.deepEqual(cfg.permission, { other: "ask", edit: "allow", bash: "allow", webfetch: "deny" });
+});
+
+test("freePort skips a port something else is listening on", async () => {
+  const { createServer } = await import("node:net");
+  const taken = await new Promise<{ port: number; close: () => void }>((resolve) => {
+    const s = createServer();
+    s.listen(0, "127.0.0.1", () => resolve({ port: (s.address() as { port: number }).port, close: () => s.close() }));
+  });
+  try {
+    const port = await freePort(taken.port);
+    assert.ok(port > taken.port && port < taken.port + 50);
+  } finally { taken.close(); }
 });
 
 test("every request carries the server password as basic auth", async () => {
