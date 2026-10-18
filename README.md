@@ -7,6 +7,8 @@ session), lets you scrub to any step and see the exact files and messages the mo
 tool results that carry prompt injections or dangerous side effects, and forks from before a
 flagged step to prove what it caused or to recover from it.
 
+![A flagged tool result: the verdict panel with injection, severity and effect scores, the part-by-part explanation quoting the poisoned CONTRIBUTING.md, and the two fork buttons](docs/screenshots/flagged-step.jpg)
+
 ## What it does
 
 - **Record.** Every step is a row holding the exact message JSON. Every file-mutating tool call is a
@@ -24,6 +26,12 @@ flagged step to prove what it caused or to recover from it.
   (same context, files restored, the model continues) or *recover* (files restored plus a ledger of
   what was reverted, what persisted and what to defuse). The ledger never quotes tool output.
 - **Compare.** Line up every fork of a branch to see where they diverged. Diff any two branches.
+
+| Sessions, with flag counts | Exactly what the model saw at a step |
+|---|---|
+| ![Home page listing sessions with runner tags and flag badges](docs/screenshots/home.jpg) | ![Context drawer showing the message array at a step, with the security classification on top](docs/screenshots/context.jpg) |
+| Recover fork removing the injection | Four forks lined up at their divergence |
+| ![The recover fork editing CONTRIBUTING.md to remove the injected setup section, file pane showing the result](docs/screenshots/recover-fork.jpg) | ![Compare view lining up four forks of a branch with the first divergence marked at step 14](docs/screenshots/compare.jpg) |
 
 ## Quick start
 
@@ -104,6 +112,8 @@ One run, thresholds as shipped, no tuning (`artifacts/api-server/bench/RESULTS.m
 On the same AgentDojo / InjecAgent rows the corpus authors report Prompt Guard 2 86M at 55% / 0% and
 50% / 0%, protectai deberta-v3 at 73% / 32% and 82% / 28%. Caveats, false-positive analysis and
 reproduction steps are in `RESULTS.md`; the Benchmark page renders the same data.
+
+![Benchmark page: results by corpus, comparison against published detectors, and the rows behind the numbers](docs/screenshots/benchmark.jpg)
 
 ## How it works
 
